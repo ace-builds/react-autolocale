@@ -1,14 +1,33 @@
 import fs from "node:fs";
 import path from "node:path";
-import { cacheDir } from "./cache.js";
+import { legacyCacheDir } from "./cache.js";
+import { writeJson } from "./files.js";
 import { BANNER_EN, type BannerText } from "./suggestion.js";
 import { mask, unmask, type Translator } from "./translate.js";
 
-const FILE = (root: string) => path.join(cacheDir(root), "_banner.json");
+/** The banner phrases live next to the catalogs. */
+export function bannerFile(output: string): string {
+  return path.join(output, "banner.json");
+}
+
+/** Banner phrases for the plugin: the generated file, else what older versions cached, else English only. */
+export function readBanner(output: string, root: string): Record<string, BannerText> {
+  const source = JSON.stringify(BANNER_EN);
+  for (const file of [bannerFile(output), path.join(legacyCacheDir(root), "_banner.json")]) {
+    try {
+      const { _source, ...langs } = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (_source === source) return { ...langs, en: BANNER_EN };
+    } catch {
+      /* not generated yet */
+    }
+  }
+  return { en: BANNER_EN };
+}
 
 /** The banner's fixed phrases in every language, so a visitor sees them in their own language. */
 export async function ensureBanner(opts: {
-  root: string;
+  /** Catalog directory. */
+  output: string;
   langs: string[];
   getTranslator: () => Translator;
   log?: (msg: string) => void;
@@ -17,7 +36,7 @@ export async function ensureBanner(opts: {
   const source = JSON.stringify(BANNER_EN);
   let cached: Record<string, BannerText> = {};
   try {
-    const file = JSON.parse(fs.readFileSync(FILE(opts.root), "utf8"));
+    const file = JSON.parse(fs.readFileSync(bannerFile(opts.output), "utf8"));
     if (file._source === source) cached = file;
   } catch {
     /* first run */
@@ -43,9 +62,6 @@ export async function ensureBanner(opts: {
     cached[lang] = text;
     changed = true;
   }
-  if (changed) {
-    fs.mkdirSync(cacheDir(opts.root), { recursive: true });
-    fs.writeFileSync(FILE(opts.root), JSON.stringify({ _source: source, ...cached }, null, 2) + "\n");
-  }
+  if (changed) writeJson(bannerFile(opts.output), { _source: source, ...cached });
   return out;
 }

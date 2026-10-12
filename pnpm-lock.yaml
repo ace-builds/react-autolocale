@@ -1,161 +1,3 @@
----
-lockfileVersion: '9.0'
-
-importers:
-
-  .:
-    configDependencies: {}
-    packageManagerDependencies:
-      pnpm:
-        specifier: 12.10.1
-        version: 12.10.1
-
-packages:
-
-  '@pnpm/exe.android-arm64@12.10.1':
-    resolution: {integrity: sha512-CVTlHPwNvadQCJD9bGSMzWIhFX8QpjtqC2c27dhdnn/9iKzEjZ3qL62o3gHpKbIuo6qn4WxTKRoaokgNdReBig==}
-    cpu: [arm64]
-    os: [android]
-
-  '@pnpm/exe.android-x64@12.10.1':
-    resolution: {integrity: sha512-NFiYLIaodY7da0XIebwcU3JoP7IK/lzF7zgKSSP+9H+QcFnQ1GDfBkuBKCYJzZ+Xu0WH54neIPLBBCaOjaaauA==}
-    cpu: [x64]
-    os: [android]
-
-  '@pnpm/exe.darwin-arm64@12.10.1':
-    resolution: {integrity: sha512-0O8tdQ8ijlPJudXspLMTcitMkdBEz6uUflazL5uQE0WMs85oQIp0U+5hfEktMFB64QqEhjqlvvujTwbzdr9oMg==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@pnpm/exe.darwin-x64@12.10.1':
-    resolution: {integrity: sha512-ud+1/uZOKEo8P/AsPynOJc/LNwfI0j6WwCElibj71rU9l4nIBnsSn+wWTIPZPkZ4BBSH5+82azSnAARMyJ1lNA==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@pnpm/exe.freebsd-x64@12.10.1':
-    resolution: {integrity: sha512-mj9PE5rf8uAfQQ2K66HSATMSut+lNiB4eSqFd5+azFVCMnxNSy/32xpZQJT21PhnN3Y4qbK+iKHe5nWAxSuRhw==}
-    cpu: [x64]
-    os: [freebsd]
-
-  '@pnpm/exe.linux-arm64-musl@12.10.1':
-    resolution: {integrity: sha512-xba+00wZJ8Um6rBJJjWl88uJj0tydB8dtomvjlCLvi0uL32vpa9CRP8Vv26FIXvbiZ1bo2RCzYt/eChxJVV52w==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@pnpm/exe.linux-arm64@12.10.1':
-    resolution: {integrity: sha512-oBdMp69ScC9UnniG4qZAQVr2fBDSXjm4yk/72vkEVyrlwS23yMxcRQl7Qdo3sgXPAygY6TWnPRKm4rXzjoyW7w==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@pnpm/exe.linux-ppc64@12.10.1':
-    resolution: {integrity: sha512-Yyb3wu09h3c7mLme270uHFiVaAIUHC411Ru9LIU2BKUIstrGlXa9OqqVWoXaRgYRdFdOFknkwG7GNn6ygwLbnw==}
-    cpu: [ppc64]
-    os: [linux]
-    libc: [glibc]
-
-  '@pnpm/exe.linux-riscv64@12.10.1':
-    resolution: {integrity: sha512-PdkeUFFkybknnGkWP0H22eMpIiS4OZXL5BcQzF4lh+vmrW3IaC2HOkbANKgot/PKO0Kl77pzA/6PKFxgbgfXIQ==}
-    cpu: [riscv64]
-    os: [linux]
-    libc: [glibc]
-
-  '@pnpm/exe.linux-s390x@12.10.1':
-    resolution: {integrity: sha512-1okKuHKJwJPAbofDxfhZWAUxEWtee4ZSf7Pah8kcvocaJkf2WxFJ5KVTiNIvDml5GLidDQsgf7Pcf/WHbCak7Q==}
-    cpu: [s390x]
-    os: [linux]
-    libc: [glibc]
-
-  '@pnpm/exe.linux-x64-musl@12.10.1':
-    resolution: {integrity: sha512-e6IqzVNkPa7srFKJKnY23uWJ+qz0LaRWiTUo/sHfFXRRMRzB5uNOr6qWWip/jqhdGwU91n9J7LrEYZ6e0tRczw==}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@pnpm/exe.linux-x64@12.10.1':
-    resolution: {integrity: sha512-ZByV0DRgWzGaDSjT5ddRBASdwz+r/qPMYh7o6RGmPQjtRGNFbSl94xY2DcAM8mqCOZJUUDtAXQ+wpBXcdpKlkg==}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@pnpm/exe.win32-arm64@12.10.1':
-    resolution: {integrity: sha512-I7QZHcjioG7orFeCRUFUHByJ1G0zFPnAlaGGyrUvb6MGkv5oeNwNPl7t+Gp+7zHfnMcgLGJ1a+Wfim0IDw3lOw==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@pnpm/exe.win32-x64@12.10.1':
-    resolution: {integrity: sha512-4WJFdp58EKlCj0zLobrXU0vpszSZIr4X/3y/uNbAQqGW0zE+VdruZB0gFc3L2kzsUzVwTYbaCn+XEhnCYSAlTg==}
-    cpu: [x64]
-    os: [win32]
-
-  pnpm@12.10.1:
-    resolution: {integrity: sha512-ukCjfrGjcNYP6oxM8dNkwTvMzvUY6YrSvO6VT1OdONo3RY5YJho/pV4GUjRQ6g//+fSXsTW+QfLBXBZCusrObA==}
-    engines: {node: '>=18.*'}
-    hasBin: true
-
-snapshots:
-
-  '@pnpm/exe.android-arm64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.android-x64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.darwin-arm64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.darwin-x64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.freebsd-x64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.linux-arm64-musl@12.10.1':
-    optional: true
-
-  '@pnpm/exe.linux-arm64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.linux-ppc64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.linux-riscv64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.linux-s390x@12.10.1':
-    optional: true
-
-  '@pnpm/exe.linux-x64-musl@12.10.1':
-    optional: true
-
-  '@pnpm/exe.linux-x64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.win32-arm64@12.10.1':
-    optional: true
-
-  '@pnpm/exe.win32-x64@12.10.1':
-    optional: true
-
-  pnpm@12.10.1:
-    optionalDependencies:
-      '@pnpm/exe.android-arm64': 12.10.1
-      '@pnpm/exe.android-x64': 12.10.1
-      '@pnpm/exe.darwin-arm64': 12.10.1
-      '@pnpm/exe.darwin-x64': 12.10.1
-      '@pnpm/exe.freebsd-x64': 12.10.1
-      '@pnpm/exe.linux-arm64': 12.10.1
-      '@pnpm/exe.linux-arm64-musl': 12.10.1
-      '@pnpm/exe.linux-ppc64': 12.10.1
-      '@pnpm/exe.linux-riscv64': 12.10.1
-      '@pnpm/exe.linux-s390x': 12.10.1
-      '@pnpm/exe.linux-x64': 12.10.1
-      '@pnpm/exe.linux-x64-musl': 12.10.1
-      '@pnpm/exe.win32-arm64': 12.10.1
-      '@pnpm/exe.win32-x64': 12.10.1
-
----
 lockfileVersion: '9.0'
 
 settings:
@@ -182,6 +24,9 @@ importers:
         specifier: ^30.1.2
         version: 30.1.2
     devDependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.133.0
+        version: 0.133.0
       '@huggingface/transformers':
         specifier: ^4.3.1
         version: 4.3.1(@types/node@22.20.5)
@@ -197,6 +42,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      openai:
+        specifier: ^7.32.0
+        version: 7.32.0(undici@8.11.2)
       playwright-core:
         specifier: ^1.50.0
         version: 1.64.0
@@ -220,6 +68,15 @@ importers:
         version: 5.0.3(@types/node@22.20.5)(jsdom@30.1.2)(vite@8.3.3(@types/node@22.20.5))
 
 packages:
+
+  '@anthropic-ai/sdk@0.133.0':
+    resolution: {integrity: sha512-jlqUN8p8ESTJj+GJnA4KjzbEfF1waEoGzRT8jwytlYGFFgv+/DUQOxlYGvYw10UzhD1kwLqYzxvA3FrTB2YWuQ==}
+    hasBin: true
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   '@asamuzakjp/css-color@7.1.3':
     resolution: {integrity: sha512-1t1U8Cm3RBl9vh3RAZhjkPaduzLSvQJRToRrxpGR/eDRW99mOREleuu+mWfiFa795bUzjwht7NgphCKTs2ianQ==}
@@ -253,6 +110,10 @@ packages:
     resolution: {integrity: sha512-UkDwEbPO1px2JQSrdh4qIgaH1JgG7GO/pFeJkpxhDxIETkT/QvGpnigXIw75ViHYPtIgKITmVUJqLjiO+JuWjA==}
     engines: {node: ^22.18.0 || >=24.11.0}
     hasBin: true
+
+  '@babel/runtime@7.29.10':
+    resolution: {integrity: sha512-NpugTzbKgGrNe45Ui32cN8vCFFMxVtP/9rtfwv0nP5FRDAjvYBxJcLVpYA9mr1jxP6cnIT7x9LUzuDTbWYYNRA==}
+    engines: {node: '>=6.9.0'}
 
   '@babel/template@8.0.0':
     resolution: {integrity: sha512-eAD0QW/AlbamBbw0FeGiwasbCVPq5ncW0HNVyLP3B9czqLyh4gvw+5JTSNt6le9+ziAU7mqDZsKTHf3jTb4chQ==}
@@ -634,6 +495,9 @@ packages:
 
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
+
+  '@stablelib/base64@1.0.1':
+    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1044,6 +908,9 @@ packages:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
     engines: {node: '>=12.0.0'}
 
+  fast-sha256@1.3.0:
+    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
+
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
     engines: {node: '>=12.0.0'}
@@ -1113,6 +980,10 @@ packages:
     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
     engines: {node: '>=6'}
     hasBin: true
+
+  json-schema-to-ts@3.1.1:
+    resolution: {integrity: sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g==}
+    engines: {node: '>=16'}
 
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
@@ -1235,6 +1106,30 @@ packages:
   onnxruntime-web@1.31.0-dev.20260914-8d85527a0:
     resolution: {integrity: sha512-Iy7rtadoBgxS/LLvDr3QW38DB1PNXRnr0GJMcL0TAt7c9qjgVQl83UlGCVyeAnK2InpmW8Uc3PL8XIuqtDeF6g==}
 
+  openai@7.32.0:
+    resolution: {integrity: sha512-avqxu/jl1gsVBCBgFNPr9sTh+wZppQphuhhFy1zEvAJxEaJ4t0ery6hZdOT9kws/EcNTARoQcZs2IT3bliE1SA==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      undici: '>=5 <9'
+      ws: ^8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   parse5@8.0.1:
     resolution: {integrity: sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==}
 
@@ -1340,6 +1235,9 @@ packages:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
 
+  standardwebhooks@1.1.1:
+    resolution: {integrity: sha512-bCbX9ZEyFkWPsRz7Bl3NuQUJohmwGSev/yhr7vhaGPlc4AfIrspIRa6cPTBuI1ItmrTDJ4d/S2hCsfe4+vQGnQ==}
+
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
 
@@ -1373,6 +1271,9 @@ packages:
   tree-kill@1.2.2:
     resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
     hasBin: true
+
+  ts-algebra@2.0.0:
+    resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
   tsdown@0.23.0:
     resolution: {integrity: sha512-BaT+ep1xnj5hdyICLd5r5SYYE+TXnI1ATePLykv9vcKpHpFTWUWRH+x1AF/E2qcu3YB6+vI8IdyxIIIffEqw5Q==}
@@ -1560,6 +1461,11 @@ packages:
 
 snapshots:
 
+  '@anthropic-ai/sdk@0.133.0':
+    dependencies:
+      json-schema-to-ts: 3.1.1
+      standardwebhooks: 1.1.1
+
   '@asamuzakjp/css-color@7.1.3':
     dependencies:
       '@csstools/css-calc': 3.4.3(@csstools/css-parser-algorithms@4.0.2(@csstools/css-tokenizer@4.0.2))(@csstools/css-tokenizer@4.0.2)
@@ -1598,6 +1504,8 @@ snapshots:
   '@babel/parser@8.0.7':
     dependencies:
       '@babel/types': 8.0.6
+
+  '@babel/runtime@7.29.10': {}
 
   '@babel/template@8.0.0':
     dependencies:
@@ -1862,6 +1770,8 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
+  '@stablelib/base64@1.0.1': {}
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -2103,6 +2013,8 @@ snapshots:
 
   expect-type@1.4.0: {}
 
+  fast-sha256@1.3.0: {}
+
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
@@ -2176,6 +2088,11 @@ snapshots:
       - '@noble/hashes'
 
   jsesc@3.1.0: {}
+
+  json-schema-to-ts@3.1.1:
+    dependencies:
+      '@babel/runtime': 7.29.10
+      ts-algebra: 2.0.0
 
   lightningcss-android-arm64@1.33.0:
     optional: true
@@ -2266,6 +2183,10 @@ snapshots:
       onnxruntime-common: 1.31.0-dev.20260911-2a43ec07e
       platform: 1.3.6
       protobufjs: 7.6.6
+
+  openai@7.32.0(undici@8.11.2):
+    optionalDependencies:
+      undici: 8.11.2
 
   parse5@8.0.1:
     dependencies:
@@ -2396,6 +2317,11 @@ snapshots:
 
   source-map-js@1.2.2: {}
 
+  standardwebhooks@1.1.1:
+    dependencies:
+      '@stablelib/base64': 1.0.1
+      fast-sha256: 1.3.0
+
   std-env@4.3.0: {}
 
   tinybench@6.2.1: {}
@@ -2422,6 +2348,8 @@ snapshots:
       punycode: 2.3.1
 
   tree-kill@1.2.2: {}
+
+  ts-algebra@2.0.0: {}
 
   tsdown@0.23.0(typescript@7.0.2):
     dependencies:

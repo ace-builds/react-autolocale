@@ -1,91 +1,96 @@
-import fs from "node:fs";
 import path from "node:path";
 import type { SiteConfig } from "./site.js";
 import { digitsPreserved, mask, unmask, type Translator } from "./translate.js";
 
 export type Dict = Record<string, string>;
 
-/** Generated translations live here, outside the source tree. */
-export function cacheDir(root: string): string {
+/** Where versions before the CLI workflow kept translations (keyed by source text). Read only, for migration. */
+export function legacyCacheDir(root: string): string {
   return path.join(root, "node_modules", ".cache", "react-autolocale");
 }
 
-export function cacheFile(root: string, lang: string): string {
-  return path.join(cacheDir(root), `${lang}.json`);
-}
-
-function readDict(file: string): Dict {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8")) as Dict;
-  } catch {
-    return {};
-  }
+export function legacyCacheFile(root: string, lang: string): string {
+  return path.join(legacyCacheDir(root), `${lang}.json`);
 }
 
 /** Strings that are entirely an excluded phrase need no translation. */
-function needsTranslation(s: string, exclude: string[]): boolean {
+export function needsTranslation(s: string, exclude: string[]): boolean {
   return !exclude.includes(s.trim());
 }
 
-export interface EnsureOptions {
-  root: string;
-  site: SiteConfig;
+export interface TranslateTextsOptions {
   strings: string[];
+  from: string;
+  to: string;
+  exclude: string[];
   /** Where each string appears ("button", "h1", ...), passed to engines that can use it. */
   contexts?: Record<string, string>;
-  /** Terms that must always translate a given way: { fr: { Roadmap: "Feuille de route" } }. */
+  /** This language's required terms: { Roadmap: "Feuille de route" }. */
+  glossary?: Record<string, string>;
+  translator: Translator;
+  log?: (msg: string) => void;
+}
+
+/**
+ * Machine-translates `strings` with protected pieces masked. Strings whose result lost a placeholder or changed
+ * a number are retried once with numbers locked; if that fails too they are reported in `failed`, never
+ * returned as a wrong or empty translation. Provider errors propagate to the caller.
+ */
+export async function translateTexts(opts: TranslateTextsOptions): Promise<{ translated: Dict; failed: string[] }> {
+  const { strings, exclude, translator } = opts;
+  const terms = opts.glossary ?? {};
+  const translated: Dict = {};
+  const failed: string[] = [];
+  for (const s of strings) if (terms[s]) translated[s] = terms[s]!; // a whole string that is a glossary term
+  const todo = strings.filter((s) => !terms[s]);
+  if (!todo.length) return { translated, failed };
+
+  const ctx = todo.map((s) => opts.contexts?.[s] ?? "");
+  const run = async (items: string[], contextList: string[], numbers: boolean) => {
+    const jobs = items.map((s) => mask(s, exclude, { glossary: terms, numbers }));
+    const out = await translator.translate(jobs.map((j) => j.masked), opts.from, opts.to, contextList);
+    return jobs.map((job, i) => unmask(out[i] ?? "", job.phrases));
+  };
+  const first = await run(todo, ctx, false);
+  const redo = todo.map((_, i) => i).filter((i) => !first[i] || !digitsPreserved(todo[i]!, first[i]!));
+  const second = redo.length ? await run(redo.map((i) => todo[i]!), redo.map((i) => ctx[i]!), true) : [];
+  todo.forEach((source, i) => {
+    const result = redo.includes(i) ? second[redo.indexOf(i)] : first[i];
+    if (result && result.trim()) translated[source] = result;
+    else failed.push(source);
+  });
+  return { translated, failed };
+}
+
+export interface EnsureOptions {
+  site: SiteConfig;
+  strings: string[];
+  contexts?: Record<string, string>;
   glossary?: Record<string, Record<string, string>>;
   /** Hand-written fixes: { fr: { "Contact": "Contact" } }. They always win over machine translation. */
   overrides?: Record<string, Record<string, string>>;
-  /** Created lazily, only if something needs translating. */
   getTranslator: () => Translator;
   log?: (msg: string) => void;
 }
 
-/** Translates only strings missing from the cache, drops unused ones, and returns every language's dictionary. */
+/** Translates every string into every language in memory (no files). Used by tests and the model checks. */
 export async function ensureTranslations(opts: EnsureOptions): Promise<Record<string, Dict>> {
-  const { root, site, strings } = opts;
-  const log = opts.log ?? (() => {});
-  const wanted = strings.filter((s) => needsTranslation(s, site.exclude));
+  const { site } = opts;
+  const wanted = opts.strings.filter((s) => needsTranslation(s, site.exclude));
   const result: Record<string, Dict> = {};
-  fs.mkdirSync(cacheDir(root), { recursive: true });
-
   for (const lang of site.languages) {
-    const file = cacheFile(root, lang);
-    const existing = readDict(file);
     const fixed = opts.overrides?.[lang] ?? {};
-    const missing = wanted.filter((s) => !existing[s] && !fixed[s]);
-    const next: Dict = {};
-    for (const s of wanted) if (existing[s]) next[s] = existing[s]!;
-    for (const s of wanted) if (fixed[s]) next[s] = fixed[s]!;
-
-    const terms = opts.glossary?.[lang] ?? {};
-    for (const s2 of missing) if (terms[s2]) next[s2] = terms[s2]!; // a whole string that is a glossary term
-    const toTranslate = missing.filter((s2) => !terms[s2]);
-
-    if (toTranslate.length) {
-      log(`[react-autolocale] ${lang}: translating ${toTranslate.length} new string${toTranslate.length === 1 ? "" : "s"}...`);
-      const ctx = toTranslate.map((s2) => opts.contexts?.[s2] ?? "");
-      const run = async (items: string[], contextList: string[], numbers: boolean) => {
-        const jobs = items.map((s2) => ({ source: s2, ...mask(s2, site.exclude, { glossary: terms, numbers }) }));
-        const out = await opts.getTranslator().translate(jobs.map((j) => j.masked), site.original, lang, contextList);
-        return jobs.map((job, i) => unmask(out[i] ?? "", job.phrases));
-      };
-      // Translate naturally first and check that every digit survived. Only strings where a number was changed
-      // or dropped are translated again with their numbers locked; if that fails too, the original text is kept
-      // rather than shipping a wrong price or phone number.
-      const first = await run(toTranslate, ctx, false);
-      const redo = toTranslate.map((source, i) => i).filter((i) => !first[i] || !digitsPreserved(toTranslate[i]!, first[i]!));
-      const second = redo.length ? await run(redo.map((i) => toTranslate[i]!), redo.map((i) => ctx[i]!), true) : [];
-      toTranslate.forEach((source, i) => {
-        const result = redo.includes(i) ? second[redo.indexOf(i)] : first[i];
-        if (result) next[source] = result;
-        else log(`[react-autolocale] ${lang}: kept "${source}" untranslated (could not preserve its numbers or excluded text)`);
-      });
-    }
-    const same = JSON.stringify(existing) === JSON.stringify(next);
-    if (!same) fs.writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
-    result[lang] = next;
+    const { translated } = await translateTexts({
+      strings: wanted.filter((s) => !fixed[s]),
+      from: site.original,
+      to: lang,
+      exclude: site.exclude,
+      contexts: opts.contexts,
+      glossary: opts.glossary?.[lang],
+      translator: opts.getTranslator(),
+      log: opts.log,
+    });
+    result[lang] = { ...translated, ...fixed };
   }
   return result;
 }
