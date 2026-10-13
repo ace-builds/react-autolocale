@@ -13,7 +13,7 @@ import {
 } from "react";
 import { redirectTarget, STORAGE_KEY } from "../core/redirect.js";
 import { BANNER_EN, DISMISSED_KEY, suggestLanguage } from "../core/suggestion.js";
-import { original, originalNative, seo, banner, languages, loaders } from "virtual:react-autolocale";
+import { original, originalNative, seo, banner, languages, loaders, eager } from "virtual:react-autolocale";
 
 type Dict = Record<string, string>;
 
@@ -51,6 +51,50 @@ function load(code: string): Promise<Dict> {
     .then((dict) => (cache.set(code, dict), dict));
 }
 
+/**
+ * Strings written outside React components (data in a content file, helpers, class components) are looked up
+ * here, at the moment the code runs. The dictionary is the one for the language in the URL, taken from the page
+ * itself (production, prerendering) or from the catalogs the dev server inlines.
+ */
+let currentDict: Dict | null = null;
+/** Set once such a string has been used: it cannot follow an in-place language change, so switching reloads. */
+let staticUsed = false;
+
+function dictNow(): Dict {
+  if (currentDict) return currentDict;
+  const boot = hasDom ? window.__AUTOSCALE__ : undefined;
+  const fromUrl = hasDom ? prefixOf(window.location.pathname) : null;
+  const lang = fromUrl ?? boot?.lang ?? original;
+  if (boot && boot.lang === lang) currentDict = boot.dict;
+  else currentDict = lang === original ? {} : (eager[lang] ?? cache.get(lang) ?? {});
+  return currentDict;
+}
+
+function fill(template: string, vars: Record<string, unknown>): string {
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name] ?? "") : match));
+}
+
+/**
+ * Marks any string for translation, wherever the automatic rules cannot see it (a lowercase word, text built in an
+ * unusual way): `msg("Open")`, `msg("Hello {name}", { name })`. The build looks the text up in the catalogs; without
+ * the plugin it simply returns the text.
+ */
+export function msg(text: string, vars?: Record<string, unknown>): string {
+  return vars ? fill(text, vars) : text;
+}
+
+/** @internal Used by the Vite plugin for a string outside any component. */
+export function __rlText(i: string, s: string): string {
+  staticUsed = true;
+  return dictNow()[i] || s;
+}
+
+/** @internal Same, for a string with variables: `Hello, ${name}` becomes ("Hello, {name}", { name }). */
+export function __rlFmt(i: string, s: string, vars: Record<string, unknown>): string {
+  staticUsed = true;
+  return fill(dictNow()[i] || s, vars);
+}
+
 interface State {
   language: string;
   dict: Dict;
@@ -66,6 +110,7 @@ function initialState(): State {
   if (!hasDom) return { language: original, dict: {} };
   const boot = window.__AUTOSCALE__;
   if (boot) cache.set(boot.lang, boot.dict);
+  for (const [code, dict] of Object.entries(eager)) if (!cache.has(code)) cache.set(code, dict); // dev: catalogs are inlined
   const { pathname, search, hash } = window.location;
   const fromUrl = prefixOf(pathname);
   if (fromUrl === null) {
@@ -116,6 +161,7 @@ export interface AutoScaleProps {
  */
 export function AutoScale({ children }: AutoScaleProps): ReactElement {
   const [state, setState] = useState<State>(initialState);
+  currentDict = state.dict;
 
   const apply = useCallback(async (code: string, push: boolean) => {
     if (!codes.has(code)) return;
@@ -125,8 +171,9 @@ export function AutoScale({ children }: AutoScaleProps): ReactElement {
       } catch {
         /* storage unavailable */
       }
-      // With seo on, every language is a real page with its own head tags, so navigate to it.
-      if (seo) {
+      // With seo on, every language is a real page with its own head tags, so navigate to it. The same goes
+      // when strings outside components were translated at load time: only a fresh page can change them.
+      if (seo || staticUsed) {
         window.location.assign(pathFor(code));
         return;
       }
@@ -162,9 +209,15 @@ export function __T({ i, s }: { i: string; s: string }): ReactElement {
 }
 
 /** @internal Inserted by the Vite plugin for translated attributes (placeholder, alt, ...). */
-export function __useT(): (i: string, s: string) => string {
+export function __useT(): ((i: string, s: string) => string) & { f: (i: string, s: string, vars: Record<string, unknown>) => string } {
   const { dict } = useContext(Context);
-  return useCallback((i: string, s: string) => dict[i] || s, [dict]);
+  return useMemo(() => {
+    const lookup = ((i: string, s: string) => dict[i] || s) as ((i: string, s: string) => string) & {
+      f: (i: string, s: string, vars: Record<string, unknown>) => string;
+    };
+    lookup.f = (i, s, vars) => fill(dict[i] || s, vars);
+    return lookup;
+  }, [dict]);
 }
 
 /** @internal Inserted by the Vite plugin for text with variables, e.g. `Hello {name}`. */

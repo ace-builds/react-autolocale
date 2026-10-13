@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import type { Plugin, ResolvedConfig, ViteDevServer } from "vite";
 import { readBanner } from "../core/banner.js";
@@ -10,9 +11,12 @@ import { discoverRoutes } from "../core/routes.js";
 import { isSourceFile } from "../core/scan.js";
 import type { BannerText } from "../core/suggestion.js";
 import { ollama, type TranslateFn, type Translator } from "../core/translate.js";
+import { buildFactsIndex, FactsIndex } from "../core/facts.js";
+import { isContentJson, jsonModule } from "../core/json.js";
 import { transformJsx } from "../core/transform.js";
 import { prerender } from "./prerender.js";
 
+const JSON_PREFIX = "\0autolocale-json:";
 const VIRTUAL_ID = "virtual:react-autolocale";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
 /** One module per language, so each dictionary is fetched only when that language is used. */
@@ -45,8 +49,10 @@ export default function reactAutolocale(options: ReactAutolocaleOptions = {}): P
   let project: Project;
   let dicts: LoadedDicts = { byId: {}, byText: {}, missing: {}, usedLegacy: false };
   let banner: Record<string, BannerText> = {};
+  let factsIndex = new FactsIndex();
   let server: ViteDevServer | undefined;
   let rendered = false;
+  let bundleWritten = false;
 
   const log = (msg: string) => console.log(msg);
   const warn = (msg: string) => config?.logger ? config.logger.warn(`[react-autolocale] ${msg}`) : log(`[react-autolocale] ${msg}`);
@@ -55,6 +61,7 @@ export default function reactAutolocale(options: ReactAutolocaleOptions = {}): P
     project = await loadProject(root, { log });
     if (options.include) project.include = options.include;
     includeDirs = project.include.map((d) => path.resolve(root, d) + path.sep);
+    factsIndex = buildFactsIndex(root, project.include);
     dicts = loadDicts(project, mergeOverrides(readOverrides(root), options.overrides));
     banner = readBanner(project.output, root);
   }
@@ -84,6 +91,8 @@ export default function reactAutolocale(options: ReactAutolocaleOptions = {}): P
       rtl: !!getLanguage(code)?.rtl,
     }));
     const loaders = site.languages.map((code) => `${JSON.stringify(code)}: () => import(${JSON.stringify(DICT_PREFIX + code)})`);
+    // Dev only: inline the catalogs so strings outside components can be translated the moment a module loads.
+    const eager = config.command === "serve" ? Object.fromEntries(site.languages.map((code) => [code, dicts.byId[code] ?? {}])) : {};
     return [
       `export const original = ${JSON.stringify(site.original)};`,
       `export const originalNative = ${JSON.stringify(getLanguage(site.original)?.native ?? site.original)};`,
@@ -91,6 +100,7 @@ export default function reactAutolocale(options: ReactAutolocaleOptions = {}): P
       `export const banner = ${JSON.stringify(banner)};`,
       `export const languages = ${JSON.stringify(meta)};`,
       `export const loaders = { ${loaders.join(", ")} };`,
+      `export const eager = ${JSON.stringify(eager)};`,
     ].join("\n");
   }
 
@@ -172,13 +182,29 @@ export default function reactAutolocale(options: ReactAutolocaleOptions = {}): P
       report();
     },
 
-    resolveId(id) {
+    async resolveId(id, importer, options) {
       if (id === VIRTUAL_ID) return RESOLVED_ID;
       if (id.startsWith(DICT_PREFIX)) return "\0" + id;
+      // Text kept in a JSON file imported by your code: serve it as a module whose strings are translated.
+      if (project && importer && /\.json$/.test(id) && !importer.startsWith("\0")) {
+        const from = importer.split("?")[0]!;
+        if (!includeDirs.some((d) => from.startsWith(d))) return null;
+        const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
+        if (!resolved || resolved.external || resolved.id.includes("?")) return null;
+        if (!includeDirs.some((d) => resolved.id.startsWith(d)) || !isContentJson(resolved.id, [project.output, project.meta])) return null;
+        if (jsonModule(fs.readFileSync(resolved.id, "utf8"), factsIndex.facts()) === null) return null; // nothing to translate
+        // Not ending in ".json": Vite's own JSON plugin would try to parse the JavaScript we generate.
+        return JSON_PREFIX + resolved.id + ".js";
+      }
       return null;
     },
 
     load(id) {
+      if (id.startsWith(JSON_PREFIX)) {
+        const file = id.slice(JSON_PREFIX.length, -".js".length);
+        this.addWatchFile(file);
+        return jsonModule(fs.readFileSync(file, "utf8"), factsIndex.facts());
+      }
       if (id === RESOLVED_ID) return virtualModule();
       if (id.startsWith("\0" + DICT_PREFIX)) {
         const lang = id.slice(1 + DICT_PREFIX.length);
@@ -191,16 +217,24 @@ export default function reactAutolocale(options: ReactAutolocaleOptions = {}): P
       const file = id.split("?")[0]!;
       if (file.startsWith("\0") || file.includes("node_modules") || !isSourceFile(file)) return null;
       if (!includeDirs.some((d) => file.startsWith(d))) return null;
-      const result = transformJsx(code, file);
+      if (project && (file.startsWith(project.output + path.sep) || file.startsWith(project.meta + path.sep))) return null; // generated files
+      factsIndex.set(file, code); // keep the "code values" current as files change in dev
+      const result = transformJsx(code, file, { facts: factsIndex.facts() });
       if (!result) return null;
       if (config.command === "serve" && project) noteUntranslated(result.strings);
       return { code: result.code, map: result.map };
     },
 
+    // closeBundle also runs when the build failed; only prerender after the files were really written, so the
+    // build's own error is the one you see.
+    writeBundle() {
+      bundleWritten = true;
+    },
+
     closeBundle: {
       order: "post",
       async handler() {
-        if (config.command !== "build" || config.build.ssr || rendered) return;
+        if (config.command !== "build" || config.build.ssr || rendered || !bundleWritten) return;
         rendered = true;
         const extra = typeof options.routes === "function" ? await options.routes() : (options.routes ?? []);
         // Routes defined in the code are found automatically; `routes` adds dynamic ones such as "/users/1".

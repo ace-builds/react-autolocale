@@ -321,15 +321,44 @@ const { language, languages, setLanguage, basePath } = useLanguage();
 
 ## What gets translated
 
-- Static JSX text, plus `placeholder`, `title`, `alt`, `aria-label`, `aria-placeholder` and `aria-description` on HTML elements. Other attributes (class names, styles, URLs, ids, event handlers) and props on your own components are never touched. JSX whitespace is collapsed the way React renders it.
-- **Text with variables**: `<p>Welcome, {user.name}. You have {count} new messages</p>` is translated as one sentence (`Welcome, {name}. You have {count} new messages`) and your values are filled in at runtime. Variables must be plain names or property paths (`name`, `user.name`, `props.count`). Text mixed with function calls, conditions or nested elements is left as written. There is no plural handling, so write `{count} message(s)` or branch in your code.
-- **Not translated**: anything with `translate="no"` (the standard HTML attribute, inherited by children), `exclude` phrases, `<code>` / `<pre>` / `<script>` / `<style>`, text made only of numbers and symbols, and data that arrives at runtime (API responses, user content).
-- **Numbers** are kept exactly as written. `translate` checks that every digit (prices, phone numbers, hours, versions) survives translation and re-translates with the number locked if not. If that still fails, the original text is kept instead of shipping a wrong number. Use `useFormat()` (below) for numbers you compute.
+You write normal code and nothing in your files changes. The scanner finds text wherever people usually put it, not only in JSX:
+
+| Where the text is written | Example |
+| --- | --- |
+| JSX text | `<h1>Welcome</h1>` |
+| Sentences with variables, links or bold words | `<p>Hello {user.name}</p>`, `<p>Read the <a href="/terms">terms</a> now</p>` (one message: `Read the {1} now`, so word order can change per language) |
+| Attributes | `placeholder`, `title`, `alt`, `aria-label` (and `aria-description`, `aria-placeholder`, ...), `<input type="submit" value="Send">`, `<meta name="description" content="...">`, `data-tooltip` |
+| Props on your own components | `<Hero title="Welcome" subtitle="Build it" />`, `<Chart text="VEHICLE · VAN" />` (not code-like props such as `variant`, `size`, `className`, `to`, `href`, `icon`) |
+| Expressions in JSX | `{open ? "Close menu" : "Open menu"}`, `{error && "Something went wrong"}`, `{name \|\| "Guest"}`, `` {`Hello, ${name}!`} ``, `{"Page " + n + " of " + total}` |
+| Data in arrays and objects, in the same file or a shared content file | `const nav = ["Home", "Pricing"]`, `{ title: "Fast", body: "Ships in seconds." }`, `[["Weight", "1.56 kg"]]`, `export const specs = {...}` in `site.js` |
+| JSON files your code imports | `import faq from "./faq.json"` (keys such as `id`, `url`, `type`, `href` are skipped) |
+| Text inside logic | `useState("Loading...")`, `setError("Invalid email")`, `alert("Saved!")`, `toast.success("Done")`, `document.title = "Dashboard"`, default props, functions that return labels |
+| Hand-written elements | `React.createElement("h1", null, "Hello")` |
+
+Numbers are kept exactly as written: `translate` checks that every digit (prices, phone numbers, hours, versions) survives translation, re-translates with the number locked if not, and otherwise keeps the original text. Use `useFormat()` (below) for numbers you compute.
+
+### How it tells text from code
+
+A string is translated when it reads like text a person sees. URLs, file names, class names (`"flex items-center"`), CSS values, colors, SVG paths, ids, lowercase code words (`"primary"`, `"submit"`), date formats and similar are left alone. Whole categories of code are never touched: object keys, `import` paths, TypeScript types and enums, `className`/`style`/`href`/`id` and other code attributes, selectors, storage keys, `fetch` and `console` calls, analytics events, class helpers (`clsx`, `cn`), and `throw new Error(...)`.
+
+**A string your code depends on is never translated, anywhere in the project.** If the code compares it (`status === "Active"`, `case "Open":`), looks it up (`icons["Home"]`, `{ Home: ... }`), checks it (`.includes("Pending")`) or names it in a type (`type S = "Open" | "Closed"`), that exact text is left as written everywhere, so nothing breaks.
+
+### When it gets one wrong
+
+- `// i18n-ignore` on or above a string (or its statement) leaves it alone; `translate="no"` on an element leaves it and everything inside it alone; `exclude` lists phrases such as brand names that are never translated.
+- `msg("text")` forces a string to be translated wherever the automatic rules can't see it, such as a lowercase word: `import { msg } from "react-autolocale"` then `msg("open")`, `msg("Hello {name}", { name })`. It returns the text, so it is safe without the plugin.
 
 ```tsx
 <p translate="no">Acme Cloud</p>                       // never translated
-<section translate="no"><Terminal /></section>          // nothing inside is translated
+const DEBUG_LABEL = "Internal build"; // i18n-ignore
 ```
+
+### Good to know
+
+- **Switching language reloads the page** when your app has text outside React components (data in a `site.js`, `useState` starting values, JSON): that text is translated when the page loads, so the new language needs a fresh page. Apps that only use text in components switch in place without a reload. Either way each language has its own URL.
+- **Compare ids, not labels.** A tab labelled `"All"` that your code checks with `=== "All"` stays in English (the code needs that exact text). To translate the label, compare something else: `{ id: "all", label: "All" }` and `filter === "all"`.
+- Text passed through your own function (`t(...)`-style helpers) and data that arrives at runtime (API responses, user-written content) is not translated: it does not exist at build time. Text you write in code around those values is.
+- Not translated yet: Markdown/MDX files, HTML inside strings (`dangerouslySetInnerHTML`), and CSS `content:`.
 
 ## Supported languages
 
@@ -457,7 +486,8 @@ With `seo`, switching language navigates to the real page (so its head tags are 
 ## Limits
 
 - Data that arrives at runtime (API responses, user-written content) is not translated: it does not exist at build time. Text you write in JSX around those values is.
-- Variables in text must be plain names or property paths; no plural rules.
+- No plural rules: write `{count} message(s)` or branch in your code (`count === 1 ? "1 message" : `${count} messages``; both branches are translated).
+- Strings your code compares, uses as keys or names in types are left as written (see "How it tells text from code"). Lowercase single words in data (`["red", "green"]`) look like code and are skipped; wrap them with `msg()`.
 - Dynamic routes (`/users/:id`) only get pages you list in `routes`, or that are linked.
 - `<AutoScale>` props must be literals so the plugin can read them at build time.
 - The CLI reads `auto-locale.config.ts`, not `vite.config`. Set `include` there if you change the plugin's `include`.

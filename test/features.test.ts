@@ -30,10 +30,10 @@ describe("dynamic templates", () => {
     expect(out).toMatch(/\{" "\}\s*<__RLTD i="msg_[0-9a-f]{10}" s="Hello \{n\}"[^>]*\/>\s*\{" "\}/);
   });
 
-  it("does not touch calls, conditions or nested elements", () => {
-    expect(extractItems(`const A = () => <p>Total {fmt(x)} due</p>;`, "A.tsx").strings).toEqual([]);
-    expect(extractItems(`const A = () => <p>Hello {ok && "x"}!</p>;`, "A.tsx").strings).toEqual([]);
-    expect(extractItems(`const A = () => <p>Hello <b>{name}</b></p>;`, "A.tsx").strings).toEqual(["Hello"]);
+  it("turns calls, conditions and nested elements into numbered placeholders", () => {
+    expect(extractItems(`const A = () => <p>Total {fmt(x)} due</p>;`, "A.tsx").strings).toEqual(["Total {1} due"]);
+    expect(extractItems(`const A = () => <p>Hello {ok && "x"}!</p>;`, "A.tsx").strings).toEqual(["Hello {1}!"]);
+    expect(extractItems(`const A = () => <p>Hello <b>{name}</b></p>;`, "A.tsx").strings).toEqual(["Hello {1}"]);
   });
 });
 
