@@ -40,7 +40,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p .",
     "prepublishOnly": "pnpm build && pnpm test",
-    "e2e": "node e2e/run.mjs"
+    "e2e": "node e2e/run.mjs",
+    "e2e:patterns": "node e2e/patterns.mjs"
   },
   "engines": {
     "node": ">=20"

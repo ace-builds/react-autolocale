@@ -1,0 +1,3 @@
+{ "title": "Frequently asked questions", "items": [
+  { "id": "how", "question": "How does it work?", "answer": "You wrap your app once." },
+  { "id": "free", "question": "Is it free?", "answer": "The engine is free to use." } ] }
