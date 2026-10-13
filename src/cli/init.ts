@@ -189,11 +189,12 @@ export async function runInit(root: string, flags: InitFlags, prompt: Prompter, 
           { value: "local", label: "Local model (OPUS-MT / NLLB-200)", help: LOCAL_HELP },
           { value: "openai", label: "Cloud AI: OpenAI", help: CLOUD_HELP },
           { value: "anthropic", label: "Cloud AI: Anthropic Claude", help: CLOUD_HELP },
+          { value: "gemini", label: "Cloud AI: Google Gemini", help: CLOUD_HELP },
         ],
         "local",
       ));
     let provider: ProviderConfig;
-    if (name === "openai" || name === "anthropic") {
+    if (name === "openai" || name === "anthropic" || name === "gemini") {
       provider = { name, model: flags.model ?? DEFAULT_MODELS[name], apiKeyEnv: flags.apiKeyEnv ?? DEFAULT_KEY_ENV[name] };
     } else if (name === "ollama") {
       if (!flags.model) throw new Error("Ollama needs a model: --provider ollama --model llama3.1");
@@ -201,7 +202,7 @@ export async function runInit(root: string, flags: InitFlags, prompt: Prompter, 
     } else if (name === "local") {
       provider = { name };
     } else {
-      throw new Error(`Unknown provider "${name}". Choose local, openai, anthropic or ollama.`);
+      throw new Error(`Unknown provider "${name}". Choose local, openai, anthropic, gemini or ollama.`);
     }
 
     // Output folder
@@ -220,13 +221,13 @@ export async function runInit(root: string, flags: InitFlags, prompt: Prompter, 
   const provider = config.provider;
   const ignore = [`${META_DIR}/cache.json`];
   let modelNote = "";
-  if (provider && typeof provider === "object" && "name" in provider && (provider.name === "openai" || provider.name === "anthropic")) {
+  if (provider && typeof provider === "object" && "name" in provider && (provider.name === "openai" || provider.name === "anthropic" || provider.name === "gemini")) {
     const keyEnv = provider.apiKeyEnv ?? DEFAULT_KEY_ENV[provider.name];
     ignore.push(".env", ".env.local");
     if (keyIsAvailable(root, keyEnv)) {
       out.log(`${keyEnv} is already set (value hidden).`);
     } else {
-      const key = await prompt.secret(`Paste your ${provider.name === "openai" ? "OpenAI" : "Anthropic"} API key to save it in .env (leave empty to do it later)`);
+      const key = await prompt.secret(`Paste your ${({ openai: "OpenAI", anthropic: "Anthropic", gemini: "Google Gemini" } as const)[provider.name]} API key to save it in .env (leave empty to do it later)`);
       if (key) {
         saveKeyToEnv(root, keyEnv, key);
         out.log(`Saved ${keyEnv} to .env (value hidden).`);
@@ -234,8 +235,9 @@ export async function runInit(root: string, flags: InitFlags, prompt: Prompter, 
         out.log(`Add ${keyEnv}=... to .env (or your environment) before running translate. No request is made without it.`);
       }
     }
-    const pkg = SDK[provider.name];
-    if (!sdkInstalled(root, pkg)) {
+    // Gemini is called over plain HTTP, so only OpenAI and Anthropic need an SDK in the project.
+    const pkg = provider.name === "gemini" ? null : SDK[provider.name];
+    if (pkg && !sdkInstalled(root, pkg)) {
       const cmd = { npm: ["install", "-D", pkg], pnpm: ["add", "-D", pkg], yarn: ["add", "-D", pkg], bun: ["add", "-d", pkg] }[d.packageManager];
       if (await prompt.confirm(`Install ${pkg} (used only by the CLI, never bundled) now with ${d.packageManager}?`, false)) {
         const res = spawnSync(d.packageManager, cmd, { cwd: root, stdio: "inherit", shell: process.platform === "win32" });
@@ -261,7 +263,7 @@ export async function runInit(root: string, flags: InitFlags, prompt: Prompter, 
   }
 
   const p = config.provider;
-  const providerLabel = !p ? "Local model" : typeof p === "function" || "translate" in p ? "Custom" : ({ local: "Local model", openai: "OpenAI", anthropic: "Anthropic Claude", ollama: "Ollama" } as const)[p.name];
+  const providerLabel = !p ? "Local model" : typeof p === "function" || "translate" in p ? "Custom" : ({ local: "Local model", openai: "OpenAI", anthropic: "Anthropic Claude", gemini: "Google Gemini", ollama: "Ollama" } as const)[p.name];
   const out_ = toProjectPath(root, resolveOutput(root, config.output));
   out.log(`\nReact Auto Locale initialized.\n`);
   out.log(`Source language: ${langName(config.sourceLocale ?? "")}`);

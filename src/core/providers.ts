@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { DEFAULT_KEY_ENV, DEFAULT_MODELS, type AnthropicProvider, type OpenAIProvider } from "./config.js";
+import { DEFAULT_KEY_ENV, DEFAULT_MODELS, type AnthropicProvider, type GeminiProvider, type OpenAIProvider } from "./config.js";
 import { getLanguage } from "./languages.js";
 import type { Project } from "./project.js";
 import { createLocalTranslator, ollama, toTranslator, TranslationError, type Translator } from "./translate.js";
@@ -30,10 +30,12 @@ export async function createProvider(project: Project, log: (msg: string) => voi
       return { translator: await openaiTranslator(project.root, p), name: `openai:${p.model ?? DEFAULT_MODELS.openai}`, chunkSize: 100 };
     case "anthropic":
       return { translator: await anthropicTranslator(project.root, p), name: `anthropic:${p.model ?? DEFAULT_MODELS.anthropic}`, chunkSize: 100 };
+    case "gemini":
+      return { translator: geminiTranslator(p), name: `gemini:${p.model ?? DEFAULT_MODELS.gemini}`, chunkSize: 100 };
   }
 }
 
-export function apiKey(provider: "openai" | "anthropic", envName?: string): string {
+export function apiKey(provider: "openai" | "anthropic" | "gemini", envName?: string): string {
   const name = envName ?? DEFAULT_KEY_ENV[provider];
   const key = process.env[name];
   if (!key) {
@@ -194,6 +196,82 @@ async function anthropicTranslator(root: string, p: AnthropicProvider): Promise<
     } catch (err) {
       if (err instanceof TranslationError) throw err;
       classify(err, Anthropic as unknown as Record<string, any>, "Anthropic");
+    }
+  });
+}
+
+// --- Google Gemini -------------------------------------------------------------------------------------------------
+// Plain REST through fetch: no SDK to install. https://ai.google.dev/api/generate-content
+
+/** Gemini's schema dialect (types in capitals) for {"translations": [string, ...]}. */
+const GEMINI_SCHEMA = {
+  type: "OBJECT",
+  properties: { translations: { type: "ARRAY", items: { type: "STRING" } } },
+  required: ["translations"],
+} as const;
+
+const GEMINI_RETRYABLE = new Set([429, 500, 502, 503, 504]);
+const GEMINI_RETRIES = 3;
+/** The model stopped because of its safety rules, not because it finished. */
+const GEMINI_DECLINED = new Set(["SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY", "RECITATION"]);
+
+/** Maps an HTTP failure to a TranslationError. Credential, permission and request errors stop the run. */
+function geminiError(status: number, data: any): TranslationError {
+  const msg: string = String(data?.error?.message ?? `HTTP ${status}`).replace(/[.\s]+$/, "");
+  if (status === 401 || status === 403 || /API key not valid|API_KEY_INVALID/i.test(msg)) {
+    return new TranslationError(`Gemini: the API key was rejected or lacks permission (${msg})`, true);
+  }
+  if (status === 404) return new TranslationError(`Gemini: model not found; check the model name (${msg})`, true);
+  if (status === 400) return new TranslationError(`Gemini: request rejected (${msg})`, true);
+  if (status === 429) return new TranslationError(`Gemini: rate limit or quota reached after retries (${msg}). Run the command again later`, true);
+  return new TranslationError(`Gemini: ${msg}`);
+}
+
+export function geminiTranslator(p: GeminiProvider, deps: { sleep?: (ms: number) => Promise<void> } = {}): Translator {
+  const key = apiKey("gemini", p.apiKeyEnv);
+  const model = p.model ?? DEFAULT_MODELS.gemini;
+  const base = (p.baseURL ?? "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
+  const url = `${base}/models/${encodeURIComponent(model)}:generateContent`;
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const backoff = (attempt: number) => Math.min(30_000, 1000 * 2 ** attempt + Math.random() * 500);
+
+  return batchedTranslator(async (texts, contexts, from, to) => {
+    const body = JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt(from, to) }] },
+      contents: [{ role: "user", parts: [{ text: userPrompt(texts, contexts) }] }],
+      generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: GEMINI_SCHEMA },
+    });
+    for (let attempt = 0; ; attempt++) {
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": key },
+          body,
+          signal: AbortSignal.timeout(120_000),
+        });
+      } catch (err) {
+        if (attempt >= GEMINI_RETRIES) throw new TranslationError(`Gemini: could not reach the API (${(err as Error).message})`);
+        await sleep(backoff(attempt));
+        continue;
+      }
+      if (GEMINI_RETRYABLE.has(res.status) && attempt < GEMINI_RETRIES) {
+        const wait = Number(res.headers.get("retry-after"));
+        await sleep(Number.isFinite(wait) && wait > 0 ? Math.min(wait, 60) * 1000 : backoff(attempt));
+        continue;
+      }
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) throw geminiError(res.status, data);
+
+      if (data.promptFeedback?.blockReason) {
+        throw new TranslationError(`Gemini declined to translate this batch (${data.promptFeedback.blockReason})`);
+      }
+      const candidate = data.candidates?.[0];
+      if (!candidate || candidate.finishReason === "MAX_TOKENS") return ""; // retried one string at a time
+      if (GEMINI_DECLINED.has(candidate.finishReason)) {
+        throw new TranslationError(`Gemini declined to translate this batch (${candidate.finishReason})`);
+      }
+      return (candidate.content?.parts ?? []).map((part: { text?: string }) => part.text ?? "").join("");
     }
   });
 }

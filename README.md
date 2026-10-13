@@ -1,6 +1,6 @@
 # react-autolocale
 
-Write your React + Vite app in one language. react-autolocale extracts the text, translates it with the engine you choose (a free local model, OpenAI or Anthropic Claude), and `vite build` produces a static page for every language (`/en/`, `/fr/`, `/es/`, ...). You don't call `t()` or manage keys, and your source files are never modified.
+Write your React + Vite app in one language. react-autolocale extracts the text, translates it with the engine you choose (a free local model, OpenAI, Anthropic Claude or Google Gemini), and `vite build` produces a static page for every language (`/en/`, `/fr/`, `/es/`, ...). You don't call `t()` or manage keys, and your source files are never modified.
 
 Translation is a separate, explicit command. Builds only read the generated catalogs. They never download a model, call an API or wait for a translation job.
 
@@ -63,7 +63,7 @@ Optional: `npx react-autolocale add switcher` copies an editable language switch
 | `export` | Copies the translations into `react-autolocale.overrides.json` for hand editing. | None |
 | `add switcher` / `add banner` | Copies an editable component into your project. | None |
 
-`init` also accepts flags, so it can run without prompts in scripts: `--source en --locales fr,es --provider local|openai|anthropic|ollama --model <id> --api-key-env <NAME> --output <dir> --yes`. Every command takes `--root <dir>`; the default is the nearest folder with a `package.json`.
+`init` also accepts flags, so it can run without prompts in scripts: `--source en --locales fr,es --provider local|openai|anthropic|gemini|ollama --model <id> --api-key-env <NAME> --output <dir> --yes`. Every command takes `--root <dir>`; the default is the nearest folder with a `package.json`.
 
 A `generate` run looks like this:
 
@@ -117,6 +117,12 @@ The engine only matters to `translate`/`generate`/`sync`. Extraction, the catalo
 - **Keys**: they are read from `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (change the name with `apiKeyEnv`), from the environment or from `.env` / `.env.local` in the project root. Variables already set in your shell win. If you paste a key into `init`, it is appended to `.env` (never over an existing value) and `.env` is added to `.gitignore`. Keys are never printed or written into the config, the catalogs or the bundle. A missing key stops the command before any request is made.
 - **Defaults**: `gpt-6-astra` for OpenAI, and `claude-opus-5-5` at `effort: "low"` for Anthropic. Short UI strings rarely need more; Claude refusals fall back server-side on models that support it.
 - **Requests**: strings are sent in batches of 25, 3 at a time, with each string's element (`button`, `h1`, ...) as context. Replies are structured JSON with one translation per string; a batch that comes back the wrong size is retried one string at a time. The SDKs time out after 2 minutes and retry rate limits and server errors 3 times.
+
+**Google Gemini** (`{ name: "gemini", model?, apiKeyEnv?, baseURL? }`) works the same way, with nothing to install: it calls Gemini's REST API directly, so there is no SDK.
+- **Key**: create one in [Google AI Studio](https://aistudio.google.com/apikey) and put `GEMINI_API_KEY=...` in `.env` (or let `init` save it for you). Change the variable name with `apiKeyEnv`.
+- **Model**: `gemini-2.5-flash` by default. Set `model` to any model id shown in AI Studio, for example a newer Flash or a Pro model for harder text.
+- **Behavior**: the same batching and context as the other cloud providers, with structured JSON replies. Rate limits (429) and server errors are retried with backoff, honoring `Retry-After`. A rejected key, a wrong model name or an exhausted quota stops the run with a clear message before anything is stored. Free-tier keys have low rate limits, so large first runs may need to be repeated; finished work is saved after every batch.
+- **Choose it**: `npx react-autolocale init --provider gemini`, or in the config: `provider: { name: "gemini" }`.
 - **Errors**: a rejected key, an unknown model or a used-up quota stops the run instead of failing every batch. A failing provider is never swapped for another one.
 
 **Ollama** (`{ name: "ollama", model: "llama3.1", url? }`) runs a local LLM that receives the context too.
