@@ -1,6 +1,6 @@
 {
   "name": "react-autolocale",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Wrap your React + Vite app in <AutoScale> and get fully translated static pages (/fr, /es, ...) from one build. Free local translation.",
   "license": "MIT",
   "keywords": [
