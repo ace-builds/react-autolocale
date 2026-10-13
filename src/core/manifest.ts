@@ -57,7 +57,7 @@ export interface ScanReport {
 /** Scans the source, updates .auto-locale/manifest.json and the source-language catalog. Never translates. */
 export function scanProject(project: Project): ScanReport {
   const { root, site } = project;
-  const scan = scanProjectDetailed(root, project.include);
+  const scan = scanProjectDetailed(root, project.include, { skip: [project.output, project.meta] });
   if (site.seo) {
     const html = path.join(root, "index.html");
     if (fs.existsSync(html)) {

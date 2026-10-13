@@ -27,7 +27,7 @@ describe("extractStrings", () => {
     ]);
   });
 
-  it("leaves bare variables, code blocks and symbol-only text alone", () => {
+  it("leaves bare variables, code blocks and symbol-only text alone, but reads props on your components", () => {
     const code = `
       const A = () => (
         <div>
@@ -39,7 +39,7 @@ describe("extractStrings", () => {
           <Foo title="Not html" />
         </div>
       );`;
-    expect(extractStrings(code, "A.tsx")).toEqual([]);
+    expect(extractStrings(code, "A.tsx")).toEqual(["Not html"]);
   });
 
   it("works with TypeScript syntax and ignores files without JSX", () => {
@@ -55,10 +55,29 @@ describe("transformJsx", () => {
     expect(out.code).toContain(`<__RLT i="${id("Get Started")}" s="Get Started" />`);
   });
 
-  it("keeps meaningful spaces around inline elements", () => {
+  it("translates a sentence with an inline element as one message, keeping the element's own text separate", () => {
     const out = transformJsx(`const A = () => <p>Read the <b>docs</b> now</p>;`, "A.tsx")!;
-    expect(out.code).toMatch(/<__RLT i="msg_[0-9a-f]{10}" s="Read the" \/>\{" "\}/);
-    expect(out.code).toMatch(/\{" "\}<__RLT i="msg_[0-9a-f]{10}" s="now" \/>/);
+    expect(out.strings).toEqual(["Read the {1} now", "docs"]);
+    expect(out.code).toMatch(/<__RLTD i="msg_[0-9a-f]{10}" s="Read the \{1\} now" v=\{\{\s*1: /);
+    expect(out.code).toContain('s="docs"'); // the bold word is translated on its own inside the placeholder
+  });
+
+  it("uses the load-time lookup for text kept by hooks (useState, useMemo, useCallback), the hook lookup elsewhere", () => {
+    const code = `function A() {
+      const [note] = useState("Ready to go");
+      const tabs = useMemo(() => ["Overview", "Pricing"], []);
+      return <p title="Plain tooltip">{note}{tabs}{open ? "Close it" : "Open it"}</p>;
+    }`;
+    const out = transformJsx(code, "A.tsx")!.code;
+    expect(out).toMatch(/useState\(__rlText\("msg_[0-9a-f]{10}", "Ready to go"\)\)/);
+    expect(out).toMatch(/useMemo\(\(\) => \[__rlText\([^)]*"Overview"\)/);
+    expect(out).toMatch(/title=\{__rl\("msg_[0-9a-f]{10}", "Plain tooltip"\)\}/); // rendered directly: follows the language
+    expect(out).toMatch(/open \? __rl\(/);
+  });
+
+  it("keeps decorative elements (icons, images) out of the sentence", () => {
+    const out = transformJsx(`const A = () => <li><Icon /> Settings</li>;`, "A.tsx")!;
+    expect(out.strings).toEqual(["Settings"]);
   });
 
   it("translates attributes through a hook inserted into the component", () => {
@@ -83,8 +102,11 @@ describe("transformJsx", () => {
     expect(out.code).toMatch(/const Box = \(\) => \{\s*const __rl = __rlUseT\(\);\s*return/);
   });
 
-  it("skips attributes outside any component", () => {
-    expect(extractStrings(`const el = <input placeholder="Hi there" />;`, "x.tsx")).toEqual([]);
+  it("translates attributes at module level with the global lookup", () => {
+    const out = transformJsx(`const el = <input placeholder="Hi there" />;`, "x.tsx")!;
+    expect(out.strings).toEqual(["Hi there"]);
+    expect(out.code).toContain("__rlText(");
+    expect(out.code).not.toContain("__rlUseT");
   });
 });
 

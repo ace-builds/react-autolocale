@@ -12,5 +12,7 @@ declare module "virtual:react-autolocale" {
   export const banner: Record<string, { prompt: string; switch: string; dismiss: string }>;
   /** Target languages (not including the original). */
   export const languages: LanguageMeta[];
+  /** Every language's dictionary, inlined by the dev server so code outside components can read it at load time. */
+  export const eager: Record<string, Record<string, string>>;
   export const loaders: Record<string, () => Promise<{ default: Record<string, string> }>>;
 }
