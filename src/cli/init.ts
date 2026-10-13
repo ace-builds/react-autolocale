@@ -79,8 +79,9 @@ function parseLocales(input: string): { ok: string[]; bad: string[] } {
 }
 
 export const LOCAL_HELP =
-  "Free and runs on your machine; no API key. Models are large (about 110 MB per English->X language, 870 MB for\n" +
-  "other pairs) and translating on the CPU uses RAM and time, so big apps or many languages can be slow.\n" +
+  "Free and works offline, with no API key, but it needs a large download the first time (about 110 MB per\n" +
+  "English->X language, 870 MB for other pairs) and translating on your CPU is slow for big apps. The quality may\n" +
+  "not match the cloud models, especially for short labels and less common languages, so review the result.\n" +
   "Models are cached in ~/.cache/react-autolocale and downloaded only when you run `translate` or `generate`,\n" +
   "never during init or builds.";
 export const CLOUD_HELP =
@@ -186,13 +187,16 @@ export async function runInit(root: string, flags: InitFlags, prompt: Prompter, 
       (await prompt.choose(
         "How would you like to translate your application?",
         [
-          { value: "local", label: "Local model (OPUS-MT / NLLB-200)", help: LOCAL_HELP },
           { value: "openai", label: "Cloud AI: OpenAI", help: CLOUD_HELP },
           { value: "anthropic", label: "Cloud AI: Anthropic Claude", help: CLOUD_HELP },
           { value: "gemini", label: "Cloud AI: Google Gemini", help: CLOUD_HELP },
+          // Last, and never the default: it needs a big download and may translate less well than the cloud models.
+          { value: "local", label: "Local model (OPUS-MT / NLLB-200): free, but a large download and lower quality", help: LOCAL_HELP },
         ],
-        "local",
       ));
+    if (!name) {
+      throw new Error("Choose a translation engine: --provider openai|anthropic|gemini|local|ollama (add --model for ollama).");
+    }
     let provider: ProviderConfig;
     if (name === "openai" || name === "anthropic" || name === "gemini") {
       provider = { name, model: flags.model ?? DEFAULT_MODELS[name], apiKeyEnv: flags.apiKeyEnv ?? DEFAULT_KEY_ENV[name] };

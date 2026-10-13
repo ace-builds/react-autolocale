@@ -1,52 +1,84 @@
 # react-autolocale
 
-Write your React + Vite app in one language. react-autolocale extracts the text, translates it with the engine you choose (a free local model, OpenAI, Anthropic Claude or Google Gemini), and `vite build` produces a static page for every language (`/en/`, `/fr/`, `/es/`, ...). You don't call `t()` or manage keys, and your source files are never modified.
+Write your React + Vite app in one language. react-autolocale extracts the text, translates it with the engine you choose (Google Gemini, OpenAI, Anthropic Claude, or as a last option a free local model), and `vite build` produces a static page for every language (`/en/`, `/fr/`, `/es/`, ...). You don't call `t()` or manage keys, and your source files are never modified.
 
 Translation is a separate, explicit command. Builds only read the generated catalogs. They never download a model, call an API or wait for a translation job.
 
 ## Quick start
 
+You need a React + Vite project and an API key from the engine you choose: [Google Gemini](https://aistudio.google.com/apikey), [OpenAI](https://platform.openai.com/api-keys) or [Anthropic](https://console.anthropic.com/settings/keys). A free local model is also available, but it is the last option, not the recommended one (see [Choosing a translation engine](#choosing-a-translation-engine)).
+
+> **Beta:** until 0.3.0 is released, install with `react-autolocale@beta`. A plain install gives the older 0.2.0, which works differently.
+
 **1. Install** (npm, yarn or pnpm)
 
 ```bash
-npm install react-autolocale     # or: yarn add react-autolocale   |   pnpm add react-autolocale
+npm install react-autolocale@beta     # or: yarn add react-autolocale@beta   |   pnpm add react-autolocale@beta
 ```
 
-**2. Set it up**
+**2. Run the setup wizard**
 
 ```bash
-npx react-autolocale init        # or: yarn react-autolocale init   |   pnpm exec react-autolocale init
+npx react-autolocale init             # or: yarn react-autolocale init   |   pnpm exec react-autolocale init
 ```
 
-The wizard detects your project and asks for:
-- your source language and target languages
-- a translation engine: a local model or a cloud provider (see [Choosing a translation engine](#choosing-a-translation-engine))
-- where the catalogs go
+It asks these questions, in this order:
 
-It then writes `auto-locale.config.ts` and adds the plugin to `vite.config`. It downloads and translates nothing.
+| Question | What to answer |
+| --- | --- |
+| **Source language** | The language your code's text is written in. Press **Enter** for English (`en`), or type **one** code such as `fr`. Not a list. |
+| **Target languages** | The languages to add, comma-separated, for example `fr,es,de`. Pressing Enter on an empty line just asks again. |
+| **How would you like to translate?** | Type the **number** of a cloud provider (OpenAI, Anthropic Claude or Google Gemini). Nothing is chosen for you. The local model is the last option. |
+| **Catalog folder** | Press **Enter** to keep the default. |
+| **API key** | Paste your key; what you type is hidden. It is saved to `.env`, and `.env` is added to `.gitignore`. Press Enter to skip and add `GEMINI_API_KEY=...` (or `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) to `.env` yourself later. |
 
-**3. Wrap your app once**
+It writes `auto-locale.config.ts` and adds the plugin to your `vite.config`. It translates and downloads nothing. To skip the questions: `npx react-autolocale init --provider gemini --source en --locales fr,es`.
+
+**3. Wrap your app once.** Open the file that renders `<App />` (usually `src/main.tsx` or `src/main.jsx`) and add the import and the wrapper. Keep `<StrictMode>` on the outside if you have it:
 
 ```tsx
-// main.tsx
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
 import { AutoScale } from "react-autolocale";
+import App from "./App";
 
 createRoot(document.getElementById("root")!).render(
-  <AutoScale exclude={["Acme Cloud"]}>
-    <App />
-  </AutoScale>,
+  <StrictMode>
+    <AutoScale>
+      <App />
+    </AutoScale>
+  </StrictMode>,
 );
 ```
 
-**4. Generate translations, then develop and build as usual**
+No props are needed: the languages come from `auto-locale.config.ts`. Without this wrapper the translations exist, but the site stays in the original language.
+
+**4. Generate the translations**
 
 ```bash
-npx react-autolocale generate    # extract strings, translate new ones, write the catalogs
-npm run dev
-npm run build                    # one static page per language and route: dist/fr/, dist/fr/about/, ...
+npx react-autolocale generate
 ```
 
-After changing text in your components, run `npx react-autolocale sync`. Only new strings are translated, and a running dev server reloads when the command finishes.
+You should see which engine is used and a count, for example `Using gemini:gemini-3.8-flash.` and `Translated 314 strings (fr 157, es 157)`. The translations are saved in `src/generated/auto-locale/`.
+
+**5. Run it and check it**
+
+```bash
+npm run dev                           # open http://localhost:5173/fr/ and /es/ (use the port it prints)
+npm run build && npm run preview      # the finished pages: dist/fr/, dist/es/, ...
+```
+
+Read the translated pages. Machine translation can get short labels or brand names wrong: fix them as described in [Fixing a translation](#fixing-a-translation), and list brand names in `<AutoScale exclude={["Acme Cloud"]}>`.
+
+**6. Commit the translations**
+
+```bash
+git add src/generated/auto-locale
+```
+
+Commit that folder so builds and deploys never need an API key or a model. Never commit `.env`.
+
+**Whenever you change text in your components**, run `npx react-autolocale sync`. Only new strings are translated, and a running dev server reloads when it finishes.
 
 Optional: `npx react-autolocale add switcher` copies an editable language switcher into your project (see below).
 
@@ -104,13 +136,13 @@ When the config sets `sourceLocale` and `locales`, `<AutoScale>` needs no langua
 
 ## Choosing a translation engine
 
-The engine only matters to `translate`/`generate`/`sync`. Extraction, the catalogs, the build and the runtime work the same with every engine.
+The engine only matters to `translate`/`generate`/`sync`. Extraction, the catalogs, the build and the runtime work the same with every engine. `init` never picks one for you.
 
-**Local model** (`{ name: "local" }`, the default). It is free and runs on your machine with no API key: OPUS-MT for English sources and NLLB-200 for everything else, through Transformers.js. The cost is disk, RAM and CPU time:
-- **Downloads**: on the first `translate`, about 110 MB per English→X language and 870 MB for NLLB-200 (non-English sources, and Portuguese, Japanese, Korean and the other NLLB languages below). If your project doesn't have `@huggingface/transformers`, a 470 MB engine is also installed once into `~/.cache/react-autolocale/engine`.
-- **Reuse**: models are cached in `~/.cache/react-autolocale` and shared by every project. A loaded model is kept for the whole run.
-- **Speed**: OPUS-MT translates 8 strings per call; on an Apple-silicon Mac that measured about 5× faster than one at a time (32 UI strings in about 0.65 s per language once the model was loaded). NLLB runs one string at a time, because batching produced garbage, so it is much slower.
-- **Progress and interruption**: progress is printed per language, and work is saved after every batch, so Ctrl+C or a crash loses at most one batch.
+| Engine | Quality | What you need | Cost |
+| --- | --- | --- | --- |
+| **Google Gemini**, **OpenAI**, **Anthropic Claude** | Best. Each string is sent with the element it appears in. | An API key | Billed by the provider (Gemini has a free tier with low limits) |
+| **Ollama** | Good, depends on the model. | Ollama installed, with a model | Free |
+| **Local model** (last option) | **May not match the cloud models**, especially short labels and less common languages. | A **large download** on first use and a fast-enough CPU | Free |
 
 **OpenAI** (`{ name: "openai", model?, apiKeyEnv?, baseURL? }`) and **Anthropic Claude** (`{ name: "anthropic", model?, apiKeyEnv?, effort? }`) avoid the downloads and are usually quicker for large jobs. You need an API key, and usage is billed by the provider.
 - **Setup**: install the official SDK in your project (`npm install -D openai` or `npm install -D @anthropic-ai/sdk`; `init` offers to do it). Only the CLI loads it; it never reaches the browser bundle.
@@ -132,6 +164,16 @@ The engine only matters to `translate`/`generate`/`sync`. Extraction, the catalo
 ```ts
 provider: async ({ texts, contexts, from, to }) => texts.map((t, i) => myTranslate(t, from, to, contexts[i])),
 ```
+
+**Local model** (`{ name: "local" }`) is the last option, not the recommended one. It is free and works offline with no API key, but you should know what you are choosing:
+- **You must download models first.** `init` and builds download nothing; the first `translate`/`generate` does.
+- **The quality may be lower than the cloud models above.** Short labels such as "Home" or "Save" and less common languages are the usual weak spots. Review the result, and fix strings in the overrides file.
+
+It runs on your machine through Transformers.js, using OPUS-MT for English sources and NLLB-200 for everything else. The cost is disk, RAM and CPU time:
+- **Downloads**: on the first `translate`, about 110 MB per English→X language and 870 MB for NLLB-200 (non-English sources, and Portuguese, Japanese, Korean and the other NLLB languages below). If your project doesn't have `@huggingface/transformers`, a 470 MB engine is also installed once into `~/.cache/react-autolocale/engine`.
+- **Reuse**: models are cached in `~/.cache/react-autolocale` and shared by every project. A loaded model is kept for the whole run.
+- **Speed**: OPUS-MT translates 8 strings per call; on an Apple-silicon Mac that measured about 5× faster than one at a time (32 UI strings in about 0.65 s per language once the model was loaded). NLLB runs one string at a time, because batching produced garbage, so it is much slower.
+- **Progress and interruption**: progress is printed per language, and work is saved after every batch, so Ctrl+C or a crash loses at most one batch.
 
 Engines receive text with protected pieces replaced by tokens (`X0X`, `{name}`) and must return them unchanged. Whatever the engine, the results are checked: a translation that drops a token or changes a number is retried once with numbers locked, and is otherwise reported as failed. It is never stored.
 
@@ -398,6 +440,9 @@ With `seo`, switching language navigates to the real page (so its head tags are 
 
 ## Troubleshooting
 
+- **`init` says `"fr, es" is not a supported code` at "Source language"**: that question takes one code (your code's language, usually `en`). The list of languages to add comes at the next question.
+- **The site is still in English after `generate`**: wrap your app in `<AutoScale>` (step 3 of the quick start), restart `npm run dev`, and open `/fr/` or `/es/`.
+- **`init` printed instructions with `original="en" languages={...}`**: you installed the older 0.2.0. Install the new version: `npm install react-autolocale@beta`.
 - **"No translations in src/generated/auto-locale/ yet" during a build**: run `npx react-autolocale generate`, then commit the folder.
 - **"OPENAI_API_KEY is not set"**: add it to `.env` in the project root or export it in your shell, then rerun `translate`. No request was made.
 - **Gemini says "model not found" or "no longer available"**: Google retires models over time. Set `model` in the provider to a current id from [AI Studio](https://aistudio.google.com) (`provider: { name: "gemini", model: "<id>" }`) and run `generate` again; strings that already succeeded are kept.
