@@ -34,7 +34,7 @@ export interface AnthropicProvider {
 /** Google Gemini through its REST API. No SDK needed. Get a key at https://aistudio.google.com/apikey. */
 export interface GeminiProvider {
   name: "gemini";
-  /** Defaults to "gemini-2.5-flash". Use any model id listed in Google AI Studio. */
+  /** Defaults to "gemini-3.8-flash". Use any model id listed in Google AI Studio. */
   model?: string;
   /** Environment variable holding the key. Defaults to GEMINI_API_KEY. */
   apiKeyEnv?: string;
@@ -70,5 +70,5 @@ export function defineConfig(config: AutoLocaleConfig): AutoLocaleConfig {
 }
 
 export const PROVIDER_NAMES = ["local", "ollama", "openai", "anthropic", "gemini"] as const;
-export const DEFAULT_MODELS = { openai: "gpt-6-astra", anthropic: "claude-opus-5-5", gemini: "gemini-2.5-flash" } as const;
+export const DEFAULT_MODELS = { openai: "gpt-6-astra", anthropic: "claude-opus-5-5", gemini: "gemini-3.8-flash" } as const;
 export const DEFAULT_KEY_ENV = { openai: "OPENAI_API_KEY", anthropic: "ANTHROPIC_API_KEY", gemini: "GEMINI_API_KEY" } as const;

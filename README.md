@@ -120,7 +120,7 @@ The engine only matters to `translate`/`generate`/`sync`. Extraction, the catalo
 
 **Google Gemini** (`{ name: "gemini", model?, apiKeyEnv?, baseURL? }`) works the same way, with nothing to install: it calls Gemini's REST API directly, so there is no SDK.
 - **Key**: create one in [Google AI Studio](https://aistudio.google.com/apikey) and put `GEMINI_API_KEY=...` in `.env` (or let `init` save it for you). Change the variable name with `apiKeyEnv`.
-- **Model**: `gemini-2.5-flash` by default. Set `model` to any model id shown in AI Studio, for example a newer Flash or a Pro model for harder text.
+- **Model**: `gemini-3.8-flash` by default. Set `model` to any model id shown in AI Studio, for example a newer Flash or a Pro model for harder text.
 - **Behavior**: the same batching and context as the other cloud providers, with structured JSON replies. Rate limits (429) and server errors are retried with backoff, honoring `Retry-After`. A rejected key, a wrong model name or an exhausted quota stops the run with a clear message before anything is stored. Free-tier keys have low rate limits, so large first runs may need to be repeated; finished work is saved after every batch.
 - **Choose it**: `npx react-autolocale init --provider gemini`, or in the config: `provider: { name: "gemini" }`.
 - **Errors**: a rejected key, an unknown model or a used-up quota stops the run instead of failing every batch. A failing provider is never swapped for another one.
@@ -400,6 +400,7 @@ With `seo`, switching language navigates to the real page (so its head tags are 
 
 - **"No translations in src/generated/auto-locale/ yet" during a build**: run `npx react-autolocale generate`, then commit the folder.
 - **"OPENAI_API_KEY is not set"**: add it to `.env` in the project root or export it in your shell, then rerun `translate`. No request was made.
+- **Gemini says "model not found" or "no longer available"**: Google retires models over time. Set `model` in the provider to a current id from [AI Studio](https://aistudio.google.com) (`provider: { name: "gemini", model: "<id>" }`) and run `generate` again; strings that already succeeded are kept.
 - **"This provider needs the openai package"** (or `@anthropic-ai/sdk`): install it as a dev dependency of your app.
 - **Some strings failed**: the report lists them by id, language and reason. Rerun `npx react-autolocale translate`, or write the value into the catalog or the overrides file yourself.
 - **The local model is slow**: NLLB languages run one string at a time on the CPU. Translate a subset with `--lang`, or switch `provider` to OpenAI or Claude for big jobs. Existing translations are kept either way.
