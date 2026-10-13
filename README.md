@@ -8,12 +8,10 @@ Translation is a separate, explicit command. Builds only read the generated cata
 
 You need a React + Vite project and an API key from the engine you choose: [Google Gemini](https://aistudio.google.com/apikey), [OpenAI](https://platform.openai.com/api-keys) or [Anthropic](https://console.anthropic.com/settings/keys). A free local model is also available, but it is the last option, not the recommended one (see [Choosing a translation engine](#choosing-a-translation-engine)).
 
-> **Beta:** until 0.3.0 is released, install with `react-autolocale@beta`. A plain install gives the older 0.2.0, which works differently.
-
 **1. Install** (npm, yarn or pnpm)
 
 ```bash
-npm install react-autolocale@beta     # or: yarn add react-autolocale@beta   |   pnpm add react-autolocale@beta
+npm install react-autolocale          # or: yarn add react-autolocale   |   pnpm add react-autolocale
 ```
 
 **2. Run the setup wizard**
@@ -446,7 +444,7 @@ With `seo`, switching language navigates to the real page (so its head tags are 
 
 - **`init` says `"fr, es" is not a supported code` at "Source language"**: that question takes one code (your code's language, usually `en`). The list of languages to add comes at the next question.
 - **The site is still in English after `generate`**: wrap your app in `<AutoScale>` (step 3 of the quick start), restart `npm run dev`, and open `/fr/` or `/es/`.
-- **`init` printed instructions with `original="en" languages={...}`**: you installed the older 0.2.0. Install the new version: `npm install react-autolocale@beta`.
+- **`init` printed instructions with `original="en" languages={...}`**: you have the older 0.2.0, which works differently. Upgrade: `npm install react-autolocale@latest` (see [Upgrading from earlier versions](#upgrading-from-earlier-versions)).
 - **"No translations in src/generated/auto-locale/ yet" during a build**: run `npx react-autolocale generate`, then commit the folder.
 - **"OPENAI_API_KEY is not set"**: add it to `.env` in the project root or export it in your shell, then rerun `translate`. No request was made.
 - **Gemini says "model not found" or "no longer available"**: Google retires models over time. Set `model` in the provider to a current id from [AI Studio](https://aistudio.google.com) (`provider: { name: "gemini", model: "<id>" }`) and run `generate` again; strings that already succeeded are kept.
