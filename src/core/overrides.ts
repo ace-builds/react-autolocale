@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { cacheDir } from "./cache.js";
+import { loadDicts } from "./catalog.js";
+import { writeJson } from "./files.js";
+import type { Project } from "./project.js";
 
 export type Overrides = Record<string, Record<string, string>>;
 
@@ -26,19 +28,17 @@ export function mergeOverrides(...all: (Overrides | undefined)[]): Overrides {
   return out;
 }
 
-/** Writes every generated translation into the overrides file (keeping entries already there) so it can be edited. */
-export function exportTranslations(root: string): { file: string; languages: Record<string, number> } {
-  const dir = cacheDir(root);
-  if (!fs.existsSync(dir)) throw new Error("No generated translations found. Run your build first.");
-  const generated: Overrides = {};
-  for (const name of fs.readdirSync(dir)) {
-    const m = /^([a-z]{2,3})\.json$/i.exec(name);
-    if (m) generated[m[1]!.toLowerCase()] = JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
-  }
-  if (!Object.keys(generated).length) throw new Error("No generated translations found. Run your build first.");
+/**
+ * Writes every generated translation into the overrides file (keeping entries already there) so it can be
+ * edited. Reads the catalogs through `loadDicts`, which also covers translations made by older versions.
+ */
+export function exportTranslations(project: Project): { file: string; languages: Record<string, number> } {
+  const { byText } = loadDicts(project);
+  const generated: Overrides = Object.fromEntries(Object.entries(byText).filter(([, d]) => Object.keys(d).length));
+  if (!Object.keys(generated).length) throw new Error("No generated translations found. Run `npx react-autolocale generate` first.");
 
-  const merged = mergeOverrides(generated, readOverrides(root)); // what is already in the file stays
-  const file = path.join(root, OVERRIDES_FILE);
-  fs.writeFileSync(file, JSON.stringify(merged, null, 2) + "\n");
+  const merged = mergeOverrides(generated, readOverrides(project.root)); // what is already in the file stays
+  const file = path.join(project.root, OVERRIDES_FILE);
+  writeJson(file, merged);
   return { file, languages: Object.fromEntries(Object.entries(merged).map(([l, s]) => [l, Object.keys(s).length])) };
 }

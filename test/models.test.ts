@@ -28,7 +28,7 @@ run("number protection with the real models", () => {
     it(`keeps every number intact in ${lang}`, async () => {
       const site = { original: "en", languages: [lang], exclude: [], seo: false };
       const dicts = await ensureTranslations({
-        root: tmp(), site, strings: NUMBERS, getTranslator: () => createLocalTranslator(), log: () => {},
+        site, strings: NUMBERS, getTranslator: () => createLocalTranslator(), log: () => {},
       });
       for (const s of NUMBERS) {
         const out = dicts[lang]![s];
@@ -55,7 +55,7 @@ run("every supported language", () => {
     it(`${lang}: produces real, complete translations`, async () => {
       const site = { original: "en", languages: [lang], exclude: [], seo: false };
       const dicts = await ensureTranslations({
-        root: tmp(), site, strings: SAMPLES, getTranslator: () => createLocalTranslator(), log: () => {},
+        site, strings: SAMPLES, getTranslator: () => createLocalTranslator(), log: () => {},
       });
       const problems: string[] = [];
       for (const s of SAMPLES) {

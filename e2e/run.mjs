@@ -3,6 +3,8 @@
  * builds that app, serves it, and drives Chrome through the behaviors users depend on.
  *
  *   node e2e/run.mjs            (needs network for installs and the first-run translation models)
+ *
+ * Translation is its own step (`react-autolocale generate`, local models); the build must not translate.
  *   CHROME_PATH=/path/to/chrome node e2e/run.mjs
  */
 import { execFileSync, spawn } from "node:child_process";
@@ -29,8 +31,11 @@ fs.cpSync(path.join(root, "examples/router-app"), app, { recursive: true });
 fs.writeFileSync(path.join(app, "package.json"), JSON.stringify({ name: "e2e-app", private: true, type: "module" }));
 console.log("Installing the example app...");
 run("npm", ["install", "--silent", "react", "react-dom", "react-router", "vite", "@vitejs/plugin-react", tarball], app);
-console.log("Building it (first run downloads translation models)...");
-run("npx", ["vite", "build"], app);
+console.log("Generating translations (first run downloads the local models)...");
+run("npx", ["react-autolocale", "generate"], app);
+console.log("Building it (no translation happens here)...");
+const buildLog = execFileSync("npx", ["vite", "build"], { cwd: app }).toString();
+process.stdout.write(buildLog);
 
 const PORT = 5191;
 const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], { cwd: app, stdio: "ignore" });
@@ -65,6 +70,9 @@ async function visit(locale, url, fn) {
 }
 const h1 = (page) => page.locator("h1").first().textContent();
 const path_ = (page) => new URL(page.url()).pathname;
+
+check("the build did no translation work", !/translating|Loading model|download/i.test(buildLog));
+check("catalogs were written to src/generated/auto-locale/", fs.existsSync(path.join(app, "src/generated/auto-locale/fr.json")));
 
 // Static HTML, as search engines and no-JS visitors get it
 const frHtml = await (await fetch(`${BASE}/fr/about/`)).text();

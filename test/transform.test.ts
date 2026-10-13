@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractStrings, transformJsx } from "../src/core/transform.js";
 import { patchViteConfig } from "../src/cli/viteConfig.js";
+import { messageId as id } from "../src/core/ids.js";
 
 describe("extractStrings", () => {
   it("finds static text and translatable attributes", () => {
@@ -51,13 +52,13 @@ describe("transformJsx", () => {
   it("replaces text with <__RLT> and imports the runtime", () => {
     const out = transformJsx(`export const A = () => <button>Get Started</button>;`, "A.tsx")!;
     expect(out.code).toContain(`import { __T as __RLT } from "react-autolocale"`);
-    expect(out.code).toContain(`<__RLT s="Get Started" />`);
+    expect(out.code).toContain(`<__RLT i="${id("Get Started")}" s="Get Started" />`);
   });
 
   it("keeps meaningful spaces around inline elements", () => {
     const out = transformJsx(`const A = () => <p>Read the <b>docs</b> now</p>;`, "A.tsx")!;
-    expect(out.code).toMatch(/<__RLT s="Read the" \/>\{" "\}/);
-    expect(out.code).toMatch(/\{" "\}<__RLT s="now" \/>/);
+    expect(out.code).toMatch(/<__RLT i="msg_[0-9a-f]{10}" s="Read the" \/>\{" "\}/);
+    expect(out.code).toMatch(/\{" "\}<__RLT i="msg_[0-9a-f]{10}" s="now" \/>/);
   });
 
   it("translates attributes through a hook inserted into the component", () => {
@@ -66,7 +67,7 @@ describe("transformJsx", () => {
       "Form.tsx",
     )!;
     expect(out.code).toContain(`const __rl = __rlUseT();`);
-    expect(out.code).toContain(`placeholder={__rl("Your email")}`);
+    expect(out.code).toContain(`placeholder={__rl("${id("Your email")}", "Your email")}`);
   });
 
   it("puts the hook in the component, not in a .map callback", () => {

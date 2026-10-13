@@ -155,22 +155,22 @@ export function AutoScale({ children }: AutoScaleProps): ReactElement {
   return createElement(Context.Provider, { value }, children);
 }
 
-/** @internal Inserted by the Vite plugin in place of static JSX text. */
-export function __T({ s }: { s: string }): ReactElement {
+/** @internal Inserted by the Vite plugin in place of static JSX text: message id and source text (the fallback). */
+export function __T({ i, s }: { i: string; s: string }): ReactElement {
   const { dict } = useContext(Context);
-  return createElement(Fragment, null, dict[s] ?? s);
+  return createElement(Fragment, null, dict[i] || s);
 }
 
 /** @internal Inserted by the Vite plugin for translated attributes (placeholder, alt, ...). */
-export function __useT(): (s: string) => string {
+export function __useT(): (i: string, s: string) => string {
   const { dict } = useContext(Context);
-  return useCallback((s: string) => dict[s] ?? s, [dict]);
+  return useCallback((i: string, s: string) => dict[i] || s, [dict]);
 }
 
 /** @internal Inserted by the Vite plugin for text with variables, e.g. `Hello {name}`. */
-export function __TD({ s, v }: { s: string; v: Record<string, unknown> }): ReactElement {
+export function __TD({ i, s, v }: { i: string; s: string; v: Record<string, unknown> }): ReactElement {
   const { dict } = useContext(Context);
-  const template = dict[s] ?? s;
+  const template = dict[i] || s;
   // Odd entries are variable names; anything React can render (strings, numbers, elements) is allowed.
   const parts = template.split(/\{(\w+)\}/g).map((part, i) => (i % 2 ? (v[part] as ReactNode) : part));
   return createElement(Fragment, null, ...parts.map((p, i) => createElement(Fragment, { key: i }, p)));
