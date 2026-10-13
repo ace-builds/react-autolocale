@@ -2,6 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { messageId } from "../src/core/ids.js";
 import { describe, expect, it } from "vitest";
 import { ensureTranslations } from "../src/core/cache.js";
 import { digitsPreserved, mask, ollama, toTranslator, unmask, type Translator } from "../src/core/translate.js";
@@ -12,7 +13,7 @@ describe("dynamic templates", () => {
     const code = `const A = ({ user, count }) => <p>Welcome, {user.name}. You have {count} new messages</p>;`;
     expect(extractItems(code, "A.tsx").strings).toEqual(["Welcome, {name}. You have {count} new messages"]);
     const out = transformJsx(code, "A.tsx")!.code;
-    expect(out).toContain(`<__RLTD s="Welcome, {name}. You have {count} new messages"`);
+    expect(out).toContain(`<__RLTD i="${messageId("Welcome, {name}. You have {count} new messages")}" s="Welcome, {name}. You have {count} new messages"`);
     expect(out).toContain("name: user.name");
     expect(out).toContain("count: count");
     expect(out).toContain(`import { __TD as __RLTD } from "react-autolocale"`);
@@ -26,7 +27,7 @@ describe("dynamic templates", () => {
 
   it("keeps meaningful outer spaces", () => {
     const out = transformJsx(`const A = ({ n }) => <p> Hello {n} </p>;`, "A.tsx")!.code;
-    expect(out).toMatch(/\{" "\}\s*<__RLTD s="Hello \{n\}"[^>]*\/>\s*\{" "\}/);
+    expect(out).toMatch(/\{" "\}\s*<__RLTD i="msg_[0-9a-f]{10}" s="Hello \{n\}"[^>]*\/>\s*\{" "\}/);
   });
 
   it("does not touch calls, conditions or nested elements", () => {
@@ -82,7 +83,6 @@ describe("number protection", () => {
       },
     };
     const dicts = await ensureTranslations({
-      root: fs.mkdtempSync(path.join(os.tmpdir(), "rl-feat-")),
       site, strings: ["Call 555-1234"], getTranslator: () => sloppy,
     });
     expect(dicts.fr!["Call 555-1234"]).toBe("Appelez 555-1234");
@@ -110,7 +110,6 @@ describe("ensureTranslations", () => {
       },
     };
     const dicts = await ensureTranslations({
-      root: tmp(),
       site,
       strings: ["Home", "Call 555-1234 now", "Roadmap", "Acme is broken 42"],
       contexts: { Home: "a", "Call 555-1234 now": "p", Roadmap: "h2" },

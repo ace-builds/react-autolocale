@@ -34,8 +34,11 @@ function literal(node: t.Node | null | undefined): string | string[] | boolean |
   return undefined;
 }
 
-/** Reads the literal props of `<AutoScale ...>` from source code. Returns null if the file has none. */
-export function parseAutoScale(code: string, file: string): SiteConfig | null {
+/**
+ * Reads the literal props of `<AutoScale ...>` from source code. Returns null if the file has none.
+ * With `required: false` (languages come from auto-locale.config.ts), missing props are allowed.
+ */
+export function parseAutoScale(code: string, file: string, opts: { required?: boolean } = {}): SiteConfig | null {
   if (!code.includes("AutoScale")) return null;
   let ast: t.File;
   try {
@@ -53,15 +56,15 @@ export function parseAutoScale(code: string, file: string): SiteConfig | null {
         if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) props[attr.name.name] = attr.value === null ? true : literal(attr.value); // bare `seo` means true
       }
       const { original, languages, exclude, seo, siteUrl } = props;
-      if (typeof original !== "string" || !Array.isArray(languages)) {
+      if (opts.required !== false && (typeof original !== "string" || !Array.isArray(languages))) {
         throw new Error(
           `${file}: <AutoScale> needs literal props, e.g. original="en" languages={["fr", "es"]}. ` +
             `Values must be written inline (not variables) so they can be read at build time.`,
         );
       }
       found = {
-        original,
-        languages: languages.filter((l) => l !== original),
+        original: typeof original === "string" ? original : "",
+        languages: Array.isArray(languages) ? languages.filter((l) => l !== original) : [],
         exclude: Array.isArray(exclude) ? exclude : [],
         seo: seo === true || seo === "true",
         siteUrl: typeof siteUrl === "string" ? siteUrl : undefined,
@@ -72,13 +75,16 @@ export function parseAutoScale(code: string, file: string): SiteConfig | null {
 }
 
 /** Finds the first <AutoScale> in the project's source folders. */
-export function findSite(root: string, include: string[]): SiteConfig {
+export function findSite(root: string, include: string[]): SiteConfig;
+export function findSite(root: string, include: string[], opts: { required: false }): SiteConfig | null;
+export function findSite(root: string, include: string[], opts: { required?: boolean } = {}): SiteConfig | null {
   for (const dir of include) {
     for (const file of walk(path.resolve(root, dir))) {
-      const site = parseAutoScale(fs.readFileSync(file, "utf8"), file);
+      const site = parseAutoScale(fs.readFileSync(file, "utf8"), file, opts);
       if (site) return site;
     }
   }
+  if (opts.required === false) return null;
   throw new Error(
     `No <AutoScale> found in ${include.join(", ")}. Wrap your app: ` +
       `<AutoScale original="en" languages={["fr", "es"]}><App /></AutoScale>`,

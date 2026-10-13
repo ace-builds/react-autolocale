@@ -17,7 +17,10 @@ export interface PrerenderOptions {
   include: string[];
   /** Extra paths to build even though no page links to them, e.g. ["/thank-you"]. */
   routes?: string[];
+  /** Message id -> translation per language, embedded in each page for the runtime. */
   dicts: Record<string, Dict>;
+  /** Source text -> translation per language, for the <head> title and meta tags. Defaults to `dicts`. */
+  headDicts?: Record<string, Dict>;
   log: (msg: string) => void;
 }
 
@@ -234,7 +237,7 @@ export async function prerender(opts: PrerenderOptions): Promise<void> {
           failures.map((f) => `  ${f.pathname}  ${f.error}`).join("\n"),
       );
     }
-    if (site.seo) applySeo({ outDir, site, dicts, pages, log });
+    if (site.seo) applySeo({ outDir, site, dicts: opts.headDicts ?? dicts, pages, log });
   } finally {
     await server.close();
   }

@@ -37,21 +37,21 @@ describe("ensureBanner", () => {
   };
 
   it("translates the phrases once per language, keeping {language} intact, and caches them", async () => {
-    const first = await ensureBanner({ root, langs: ["en", "fr"], getTranslator: () => translator });
+    const first = await ensureBanner({ output: root, langs: ["en", "fr"], getTranslator: () => translator });
     expect(first.en).toEqual(BANNER_EN);
     expect(first.fr!.prompt).toBe("fr:This page is also available in {language}.");
     expect(first.fr!.switch).toBe("fr:Read in {language}");
     expect(calls).toHaveLength(1);
     expect(calls[0]![0]).toContain("X0X");
 
-    await ensureBanner({ root, langs: ["en", "fr"], getTranslator: () => translator });
+    await ensureBanner({ output: root, langs: ["en", "fr"], getTranslator: () => translator });
     expect(calls).toHaveLength(1); // cached
   });
 
   it("falls back to English when the model loses the {language} placeholder", async () => {
     const r2 = fs.mkdtempSync(path.join(os.tmpdir(), "rl-banner-"));
     const bad: Translator = { translate: async (texts) => texts.map(() => "no placeholder here") };
-    const out = await ensureBanner({ root: r2, langs: ["es"], getTranslator: () => bad });
+    const out = await ensureBanner({ output: r2, langs: ["es"], getTranslator: () => bad });
     expect(out.es!.prompt).toBe(BANNER_EN.prompt);
   });
 });

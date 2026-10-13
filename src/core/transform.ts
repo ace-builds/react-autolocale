@@ -3,13 +3,14 @@ import _traverse from "@babel/traverse";
 import _generate from "@babel/generator";
 import * as t from "@babel/types";
 import type { NodePath } from "@babel/traverse";
+import { messageId } from "./ids.js";
 
 // Babel ships CJS-style default exports in some setups; normalise both shapes.
 const traverse: typeof _traverse = (_traverse as any).default ?? _traverse;
 const generate: typeof _generate = (_generate as any).default ?? _generate;
 
 /** Attributes whose string value is user-visible text. */
-const TRANSLATABLE_ATTRS = new Set(["placeholder", "title", "alt", "aria-label", "aria-description"]);
+const TRANSLATABLE_ATTRS = new Set(["placeholder", "title", "alt", "aria-label", "aria-placeholder", "aria-description"]);
 /** Elements whose text content is code, not copy. */
 const SKIP_ELEMENTS = new Set(["script", "style", "code", "pre", "kbd", "samp", "svg", "textarea"]);
 
@@ -210,6 +211,7 @@ export function transformJsx(code: string, file: string, opts: { rewrite?: boole
             t.jsxOpeningElement(
               t.jsxIdentifier(TD_IMPORT),
               [
+                t.jsxAttribute(t.jsxIdentifier("i"), t.stringLiteral(messageId(tpl.text))),
                 t.jsxAttribute(t.jsxIdentifier("s"), t.stringLiteral(tpl.text)),
                 t.jsxAttribute(t.jsxIdentifier("v"), t.jsxExpressionContainer(valueObject)),
               ],
@@ -241,7 +243,14 @@ export function transformJsx(code: string, file: string, opts: { rewrite?: boole
         if (/^\s/.test(cleaned)) children.push(space());
         children.push(
           t.jsxElement(
-            t.jsxOpeningElement(t.jsxIdentifier(T_IMPORT), [t.jsxAttribute(t.jsxIdentifier("s"), t.stringLiteral(text))], true),
+            t.jsxOpeningElement(
+              t.jsxIdentifier(T_IMPORT),
+              [
+                t.jsxAttribute(t.jsxIdentifier("i"), t.stringLiteral(messageId(text))),
+                t.jsxAttribute(t.jsxIdentifier("s"), t.stringLiteral(text)),
+              ],
+              true,
+            ),
             null,
             [],
           ),
@@ -269,7 +278,7 @@ export function transformJsx(code: string, file: string, opts: { rewrite?: boole
       if (!rewrite) return;
 
       path.node.value = t.jsxExpressionContainer(
-        t.callExpression(t.identifier(HOOK_VAR), [t.stringLiteral(text)]),
+        t.callExpression(t.identifier(HOOK_VAR), [t.stringLiteral(messageId(text)), t.stringLiteral(text)]),
       );
       hookTargets.add(component);
     },

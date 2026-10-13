@@ -11,6 +11,20 @@ export interface Translator {
   translate(texts: string[], from: string, to: string, contexts?: string[]): Promise<string[]>;
 }
 
+/**
+ * A translation that could not be done. `fatal` errors (missing key, bad credentials, unknown model, missing
+ * package) stop the whole run, since every further request would fail the same way.
+ */
+export class TranslationError extends Error {
+  constructor(
+    message: string,
+    readonly fatal = false,
+  ) {
+    super(message);
+    this.name = "TranslationError";
+  }
+}
+
 /** The simplest way to plug in your own engine (DeepL, an LLM, ...): one function. */
 export type TranslateFn = (request: { texts: string[]; contexts: string[]; from: string; to: string }) => Promise<string[]>;
 
@@ -32,6 +46,7 @@ export function ollama(options: { model: string; url?: string } = { model: "llam
         const where = contexts[i] ? ` It appears in a website ${contexts[i]} element.` : "";
         const res = await fetch(`${url}/api/chat`, {
           method: "POST",
+          signal: AbortSignal.timeout(120_000),
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             model: options.model,
@@ -47,8 +62,10 @@ export function ollama(options: { model: string; url?: string } = { model: "llam
               { role: "user", content: texts[i]! },
             ],
           }),
+        }).catch((err: Error) => {
+          throw new TranslationError(`Could not reach Ollama at ${url} (${err.message}). Is it running?`, err.name !== "TimeoutError");
         });
-        if (!res.ok) throw new Error(`Ollama request failed (${res.status}). Is it running at ${url}?`);
+        if (!res.ok) throw new TranslationError(`Ollama request failed (${res.status}). Is the model "${options.model}" pulled?`, res.status === 404);
         const body = (await res.json()) as { message?: { content?: string } };
         out.push((body.message?.content ?? "").trim());
       }
@@ -91,8 +108,9 @@ async function loadEngine(log: (msg: string) => void): Promise<Engine> {
       if (res.status !== 0) throw new Error("npm failed");
       entry = find();
     } catch {
-      throw new Error(
+      throw new TranslationError(
         `Could not install the translation engine automatically. Install it yourself: npm install -D @huggingface/transformers`,
+        true,
       );
     }
   }
@@ -103,8 +121,9 @@ async function loadEngine(log: (msg: string) => void): Promise<Engine> {
 type Pipe = (input: string[], options?: Record<string, unknown>) => Promise<{ translation_text: string }[]>;
 
 const NLLB_MODEL = "Xenova/nllb-200-distilled-600M";
-// One string per call: batched NLLB generation with padding produced runaway garbage after the real translation.
-const BATCH = 1;
+// One string per call for NLLB: batched generation with padding produced runaway garbage after the real
+// translation. OPUS-MT batches cleanly and runs about 5x faster with 8 strings per call (measured on en->fr/es/de).
+const batchSize = (model: string) => (model.includes("opus-mt") ? 8 : 1);
 
 /**
  * Free, offline translation using Transformers.js (ONNX models run on the CPU).
@@ -122,15 +141,15 @@ export function createLocalTranslator(log: (msg: string) => void = () => {}): Tr
         m.env.cacheDir = path.join(os.homedir(), ".cache", "react-autolocale", "models");
         return m;
       });
-      log(`Loading model ${model} (first run downloads it)...`);
-      let lastPct = -10;
+      log(`Loading model ${model} (downloaded once into ~/.cache/react-autolocale/models)...`);
+      const lastPct = new Map<string, number>(); // per file, so each download reports its own progress
       p = hf.then((m) =>
         m.pipeline("translation", model, {
           dtype: "q8",
           progress_callback: (e: any) => {
-            if (e.status === "progress" && e.progress - lastPct >= 10) {
-              lastPct = e.progress;
-              log(`  downloading ${e.file}: ${Math.round(e.progress)}%`);
+            if (e.status === "progress" && e.progress - (lastPct.get(e.file) ?? -10) >= 10) {
+              lastPct.set(e.file, e.progress);
+              log(`  model ${model.split("/").pop()} ${e.file}: ${Math.round(e.progress)}% (download or cache read)`);
             }
           },
         } as any),
@@ -143,8 +162,9 @@ export function createLocalTranslator(log: (msg: string) => void = () => {}): Tr
   const run = async (model: string, texts: string[], options: Record<string, unknown>): Promise<string[]> => {
     const pipe = await getPipe(model);
     const out: string[] = [];
-    for (let i = 0; i < texts.length; i += BATCH) {
-      const res = await pipe(texts.slice(i, i + BATCH), { max_new_tokens: 256, ...options });
+    const step = batchSize(model);
+    for (let i = 0; i < texts.length; i += step) {
+      const res = await pipe(texts.slice(i, i + step), { max_new_tokens: 256, ...options });
       out.push(...res.map((r) => r.translation_text.trim()));
     }
     return out;
