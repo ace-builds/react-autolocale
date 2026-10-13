@@ -7,7 +7,8 @@ export interface Prompter {
   /** Typed characters are not echoed; the value is never printed. */
   secret(question: string): Promise<string>;
   confirm(question: string, fallback: boolean): Promise<boolean>;
-  choose<T extends string>(question: string, options: { value: T; label: string; help?: string }[], fallback: T): Promise<T>;
+  /** With no `fallback` there is no default: interactive runs must pick a number; non-interactive runs get `undefined`. */
+  choose<T extends string>(question: string, options: { value: T; label: string; help?: string }[], fallback?: T): Promise<T | undefined>;
 }
 
 export function createPrompter(interactive: boolean): Prompter {
@@ -48,7 +49,8 @@ export function createPrompter(interactive: boolean): Prompter {
         console.log(`  ${i + 1}) ${o.label}`);
         if (o.help) console.log(o.help.replace(/^/gm, "     ") + "\n");
       });
-      const def = String(options.findIndex((o) => o.value === fallback) + 1);
+      const index = options.findIndex((o) => o.value === fallback);
+      const def = index >= 0 ? String(index + 1) : "";
       for (;;) {
         const answer = await ask("Choose a number", def);
         const picked = options[Number(answer) - 1];

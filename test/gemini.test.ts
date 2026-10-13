@@ -50,7 +50,7 @@ describe("gemini provider", () => {
     const out = await t.translate(["Home", "Contact"], "en", "fr", ["a", "a"]);
     expect(out).toEqual(["Accueil", "Contact"]);
     const r = requests[0]!;
-    expect(r.url).toBe("/v1beta/models/gemini-2.5-flash:generateContent");
+    expect(r.url).toBe("/v1beta/models/gemini-3.8-flash:generateContent");
     expect(r.key).toBe("test-key-123");
     expect(JSON.stringify(r.body)).not.toContain("test-key-123"); // never in the body
     expect(r.body.generationConfig.responseMimeType).toBe("application/json");

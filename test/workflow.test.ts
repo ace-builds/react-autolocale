@@ -142,6 +142,35 @@ describe("init", () => {
     });
   }
 
+  it("offers the cloud engines first, the local model last, and no default", async () => {
+    const dir = base();
+    let seen: { values: string[]; labels: string[]; fallback: string | undefined } | null = null;
+    const prompt: Prompter = {
+      ...noPrompt,
+      interactive: true,
+      ask: async (_q, fallback = "") => fallback || "x",
+      choose: (async (_q: string, options: { value: string; label: string; help?: string }[], fallback?: string) => {
+        seen = { values: options.map((o) => o.value), labels: options.map((o) => `${o.label} ${o.help ?? ""}`), fallback };
+        return "gemini";
+      }) as Prompter["choose"],
+      secret: async () => "",
+      confirm: async () => false,
+    };
+    await runInit(dir, { source: "en", locales: ["fr"] }, prompt, quiet());
+    expect(seen!.values).toEqual(["openai", "anthropic", "gemini", "local"]);
+    expect(seen!.fallback).toBeUndefined(); // nothing is chosen for the user
+    const local = seen!.labels[3]!;
+    expect(local).toMatch(/large download/i);
+    expect(local).toMatch(/quality/i);
+    expect(fs.readFileSync(path.join(dir, "auto-locale.config.ts"), "utf8")).toContain(`name: "gemini"`);
+  });
+
+  it("refuses to pick an engine for you when it cannot ask", async () => {
+    const dir = base();
+    await expect(runInit(dir, { source: "en", locales: ["fr"] }, noPrompt, quiet())).rejects.toThrow(/Choose a translation engine: --provider/);
+    expect(fs.existsSync(path.join(dir, "auto-locale.config.ts"))).toBe(false);
+  });
+
   it("keeps an existing config unless told to replace it", async () => {
     const dir = base();
     fs.writeFileSync(path.join(dir, "auto-locale.config.ts"), `export default { sourceLocale: "en", locales: ["en", "it"] };\n`);
