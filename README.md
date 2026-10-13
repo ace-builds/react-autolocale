@@ -61,12 +61,16 @@ npx react-autolocale generate
 
 You should see which engine is used and a count, for example `Using gemini:gemini-3.8-flash.` and `Translated 314 strings (fr 157, es 157)`. The translations are saved in `src/generated/auto-locale/`.
 
+**This is the only step that uses your API key.** You run it on your own computer, once, and again only when your text changes. Nothing after this step needs the key or the internet.
+
 **5. Run it and check it**
 
 ```bash
 npm run dev                           # open http://localhost:5173/fr/ and /es/ (use the port it prints)
 npm run build && npm run preview      # the finished pages: dist/fr/, dist/es/, ...
 ```
+
+You do **not** need the API key for this step, or for deploying: `build` and `preview` only read the translations you already generated. Put the key in `.env` on your own computer and nowhere else, so you never add it to Vercel, Netlify or your CI.
 
 Read the translated pages. Machine translation can get short labels or brand names wrong: fix them as described in [Fixing a translation](#fixing-a-translation), and list brand names in `<AutoScale exclude={["Acme Cloud"]}>`.
 
