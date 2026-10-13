@@ -7,5 +7,6 @@ export type {
   OllamaProvider,
   OpenAIProvider,
   AnthropicProvider,
+  GeminiProvider,
 } from "./core/config.js";
 export type { Translator, TranslateFn } from "./core/translate.js";

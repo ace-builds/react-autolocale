@@ -10,7 +10,7 @@ import { createPrompter } from "./prompt.js";
 const HELP = `react-autolocale
 
 Usage:
-  react-autolocale init [--source en] [--locales fr,es] [--provider local|openai|anthropic|ollama]
+  react-autolocale init [--source en] [--locales fr,es] [--provider local|openai|anthropic|gemini|ollama]
                         [--model <id>] [--api-key-env <NAME>] [--output <dir>] [--yes] [--force]
       Sets up auto-locale.config.ts, the translation provider and the Vite plugin. Downloads nothing.
   react-autolocale generate [--lang fr,es]

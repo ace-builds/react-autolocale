@@ -119,7 +119,7 @@ describe("init", () => {
     expect(out.lines.join("\n")).toContain("Local models are not downloaded yet");
   });
 
-  for (const [name, env] of [["openai", "OPENAI_API_KEY"], ["anthropic", "ANTHROPIC_API_KEY"]] as const) {
+  for (const [name, env] of [["openai", "OPENAI_API_KEY"], ["anthropic", "ANTHROPIC_API_KEY"], ["gemini", "GEMINI_API_KEY"]] as const) {
     it(`configures ${name} with ${env}, saves a pasted key to .env without printing it`, async () => {
       const dir = base();
       const out = quiet();
