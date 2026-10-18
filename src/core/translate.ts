@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -100,16 +100,24 @@ async function loadEngine(log: (msg: string) => void): Promise<Engine> {
     const pkg = path.join(ENGINE_DIR, "package.json");
     if (!fs.existsSync(pkg)) fs.writeFileSync(pkg, JSON.stringify({ name: "react-autolocale-engine", private: true }));
     const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-    const res = spawnSync(npm, ["install", "--prefix", ENGINE_DIR, "--no-audit", "--no-fund", "--loglevel=error", ENGINE_PACKAGE], {
-      stdio: "inherit",
-      shell: process.platform === "win32",
+    // Async and captured, so a progress line keeps moving and npm's output doesn't draw over it.
+    const errors = await new Promise<string | null>((resolve) => {
+      const child = spawn(npm, ["install", "--prefix", ENGINE_DIR, "--no-audit", "--no-fund", "--loglevel=error", ENGINE_PACKAGE], {
+        stdio: ["ignore", "ignore", "pipe"],
+        shell: process.platform === "win32",
+      });
+      let stderr = "";
+      child.stderr!.on("data", (d) => (stderr += d));
+      child.on("error", (err) => resolve(err.message));
+      child.on("close", (code) => resolve(code === 0 ? null : stderr.trim() || `npm exited with code ${code}`));
     });
     try {
-      if (res.status !== 0) throw new Error("npm failed");
+      if (errors) throw new Error(errors);
       entry = find();
-    } catch {
+    } catch (err) {
       throw new TranslationError(
-        `Could not install the translation engine automatically. Install it yourself: npm install -D @huggingface/transformers`,
+        `Could not install the translation engine automatically (${(err as Error).message.split("\n").slice(-3).join(" ")}). ` +
+          `Install it yourself: npm install -D @huggingface/transformers`,
         true,
       );
     }

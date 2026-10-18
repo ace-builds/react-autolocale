@@ -4,20 +4,16 @@ import { ensureBanner } from "../core/banner.js";
 import { catalogFile, importLegacyCache, removeFromCatalogs, translateMissing, type TranslateReport } from "../core/catalog.js";
 import { loadEnv } from "../core/env.js";
 import { writeJson } from "../core/files.js";
+import { getLanguage } from "../core/languages.js";
 import { manifestFile, readManifest, scanProject, type ScanReport } from "../core/manifest.js";
 import { readOverrides } from "../core/overrides.js";
 import type { Project } from "../core/project.js";
 import { createProvider } from "../core/providers.js";
 import { TranslationError } from "../core/translate.js";
+import { fail, info, intro, note, ok, outro, plural, warn, type Out, type Progress } from "./out.js";
 import type { Prompter } from "./prompt.js";
 
-export interface Out {
-  log(msg: string): void;
-}
-
-const ok = (out: Out, msg: string) => out.log(`✓ ${msg}`);
-const note = (out: Out, msg: string) => out.log(`! ${msg}`);
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+export type { Out } from "./out.js";
 
 /** `scan`: extract strings and update the manifest + source catalog. No translation, no network. */
 export function runScan(project: Project, out: Out): ScanReport {
@@ -25,10 +21,10 @@ export function runScan(project: Project, out: Out): ScanReport {
   ok(out, `Scanned ${plural(report.fileCount, "source file")}`);
   ok(out, `Found ${plural(report.added.length, "new string")} (${report.active.length} in use)`);
   if (report.removed.length) {
-    note(out, `${plural(report.removed.length, "string")} no longer in the source; translations kept (remove them with \`npx react-autolocale clean\`).`);
+    warn(out, `${plural(report.removed.length, "string")} no longer in the source; translations kept (remove them with \`npx react-autolocale clean\`).`);
   }
   if (report.previousSource) {
-    note(out, `The source language changed from ${report.previousSource} to ${project.site.original}. Existing translations were made from ${report.previousSource}.`);
+    warn(out, `The source language changed from ${report.previousSource} to ${project.site.original}. Existing translations were made from ${report.previousSource}.`);
   }
   if (report.previousOutput) migrateOutput(project, report.previousOutput, out);
   return report;
@@ -47,7 +43,7 @@ function migrateOutput(project: Project, previous: string, out: Out): void {
     const to = catalogFile(project, lang);
     if (fs.existsSync(from) && !fs.existsSync(to)) (fs.copyFileSync(from, to), copied.push(lang));
   }
-  note(
+  warn(
     out,
     `Catalogs were previously in ${previous}/ and are now written to ${project.outputRel}/.` +
       (copied.length ? ` Copied ${copied.join(", ")} catalogs to the new folder.` : "") +
@@ -59,6 +55,8 @@ function migrateOutput(project: Project, previous: string, out: Out): void {
 export interface TranslateFlags {
   langs?: string[];
 }
+
+const langLabel = (code: string) => `${getLanguage(code)?.english ?? code} (${code})`;
 
 /** `translate`: fill missing catalog entries with the configured provider. */
 export async function runTranslate(project: Project, flags: TranslateFlags, out: Out): Promise<TranslateReport | null> {
@@ -80,12 +78,17 @@ export async function runTranslate(project: Project, flags: TranslateFlags, out:
     throw err;
   }
   if (provider.name === "local") {
-    out.log(
-      "Using the local models (CPU). Downloaded once into ~/.cache/react-autolocale and reused by every project: about 110 MB per " +
-        "English->X language (OPUS-MT), 870 MB for other pairs (NLLB-200), plus a 470 MB engine if your project has no @huggingface/transformers.",
+    note(
+      out,
+      "Runs on your CPU. Models are downloaded once into ~/.cache/react-autolocale and shared by every project: " +
+        "about 110 MB per English->X language (OPUS-MT), 870 MB for other pairs (NLLB-200), plus a 470 MB " +
+        "engine if your project has no @huggingface/transformers.",
+      "Using the local models",
     );
   } else {
-    out.log(`Using ${provider.name}.`);
+    const label: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic Claude", gemini: "Google Gemini", ollama: "Ollama", custom: "your custom translator" };
+    const [engine = "", model] = provider.name.split(/:(.*)/);
+    info(out, `Using ${label[engine] ?? engine}${model ? ` (${model})` : ""}.`);
   }
 
   // Ctrl+C: finish the chunk in flight, save it, stop. A second Ctrl+C exits immediately.
@@ -96,6 +99,8 @@ export async function runTranslate(project: Project, flags: TranslateFlags, out:
     process.once("SIGINT", () => process.exit(130));
   };
   process.once("SIGINT", onSigint);
+  const ui = out.ui;
+  let bar: Progress | null = null;
   let report: TranslateReport;
   try {
     report = await translateMissing(project, manifest, {
@@ -106,16 +111,29 @@ export async function runTranslate(project: Project, flags: TranslateFlags, out:
       chunkSize: provider.chunkSize,
       shouldStop: () => interrupted,
       log: (m) => out.log(`  ${m}`),
+      // Terminals get one progress bar per language; plain output keeps the "fr: 40/120" lines.
+      onProgress: ui
+        ? ({ lang, done, total, failed, finished }) => {
+            bar ??= ui.progress(langLabel(lang), total);
+            bar.advance(done);
+            if (!finished) return;
+            if (done < total) bar.fail(`${langLabel(lang)}: stopped at ${done}/${total}`);
+            else if (failed) bar.fail(`${langLabel(lang)}: ${total - failed}/${total} translated, ${failed} failed`);
+            else bar.stop(`${langLabel(lang)}: ${plural(total, "string")} translated`);
+            bar = null;
+          }
+        : undefined,
     });
   } finally {
     process.removeListener("SIGINT", onSigint);
+    (bar as Progress | null)?.fail("Stopped");
   }
 
   if (!report.stopped) {
     try {
       await ensureBanner({ output: project.output, langs: [project.site.original, ...project.site.languages], getTranslator: () => provider.translator });
     } catch (err) {
-      note(out, `Language-suggestion banner not translated (${(err as Error).message}); it shows in English.`);
+      warn(out, `Language-suggestion banner not translated (${(err as Error).message}); it shows in English.`);
     }
   }
   printTranslateReport(project, report, out);
@@ -132,20 +150,20 @@ function printTranslateReport(project: Project, report: TranslateReport, out: Ou
   ok(out, `Updated ${plural(langs.length, "locale catalog")} in ${project.outputRel}/`);
   for (const [lang, r] of langs) {
     if (!r.failed.length) continue;
-    out.log(`✗ ${lang}: ${plural(r.failed.length, "string")} failed (shown in ${project.site.original} until fixed)`);
-    for (const f of r.failed.slice(0, 5)) out.log(`    ${f.id} "${f.text.slice(0, 60)}": ${f.reason}`);
-    if (r.failed.length > 5) out.log(`    ...and ${r.failed.length - 5} more`);
+    const lines = r.failed.slice(0, 5).map((f) => `  ${f.id} "${f.text.slice(0, 60)}": ${f.reason}`);
+    if (r.failed.length > 5) lines.push(`  ...and ${r.failed.length - 5} more`);
+    fail(out, `${lang}: ${plural(r.failed.length, "string")} failed (shown in ${project.site.original} until fixed)\n${lines.join("\n")}`);
   }
-  if (report.stopped) out.log(`✗ Stopped: ${report.stopped}. Everything finished so far was saved.`);
-  if (failedTotal || report.stopped) out.log("Retry the remaining strings with: npx react-autolocale translate");
+  if (report.stopped) fail(out, `Stopped: ${report.stopped}. Everything finished so far was saved.`);
+  if (failedTotal || report.stopped) info(out, "Retry the remaining strings with: npx react-autolocale translate");
 }
 
 /** `generate` / `sync`: scan, then translate what is missing. Both are incremental. */
 export async function runGenerate(project: Project, flags: TranslateFlags, out: Out): Promise<{ scan: ScanReport; translate: TranslateReport | null }> {
-  out.log("React Auto Locale\n");
+  intro(out, "React Auto Locale");
   const scan = runScan(project, out);
   const translate = await runTranslate(project, flags, out);
-  out.log("\nNo source files modified.");
+  outro(out, "No source files modified.");
   return { scan, translate };
 }
 
@@ -157,12 +175,12 @@ export async function runClean(project: Project, flags: { yes?: boolean }, promp
     ok(out, "Nothing to clean: every catalog entry is still used.");
     return 0;
   }
-  out.log(`${plural(unused.length, "string")} no longer appear in the source:`);
-  for (const [id, m] of unused.slice(0, 20)) out.log(`  ${id} "${m.text.slice(0, 70)}"`);
-  if (unused.length > 20) out.log(`  ...and ${unused.length - 20} more`);
+  const lines = unused.slice(0, 20).map(([id, m]) => `${id} "${m.text.slice(0, 70)}"`);
+  if (unused.length > 20) lines.push(`...and ${unused.length - 20} more`);
+  note(out, lines.join("\n"), `${plural(unused.length, "string")} no longer appear in the source`);
   const go = flags.yes || (await prompt.confirm("Remove them and their translations from every catalog?", false));
   if (!go) {
-    out.log(prompt.interactive ? "Nothing removed." : "Nothing removed. Run `npx react-autolocale clean --yes` to remove them.");
+    info(out, prompt.interactive ? "Nothing removed." : "Nothing removed. Run `npx react-autolocale clean --yes` to remove them.");
     return 0;
   }
   const ids = unused.map(([id]) => id);

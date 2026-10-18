@@ -149,8 +149,8 @@ describe("init", () => {
       ...noPrompt,
       interactive: true,
       ask: async (_q, fallback = "") => fallback || "x",
-      choose: (async (_q: string, options: { value: string; label: string; help?: string }[], fallback?: string) => {
-        seen = { values: options.map((o) => o.value), labels: options.map((o) => `${o.label} ${o.help ?? ""}`), fallback };
+      choose: (async (_q: string, options: { value: string; label: string; hint?: string }[], fallback?: string) => {
+        seen = { values: options.map((o) => o.value), labels: options.map((o) => `${o.label} ${o.hint ?? ""}`), fallback };
         return "gemini";
       }) as Prompter["choose"],
       secret: async () => "",

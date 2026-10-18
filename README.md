@@ -24,11 +24,13 @@ It asks these questions, in this order:
 
 | Question | What to answer |
 | --- | --- |
-| **Source language** | The language your code's text is written in. Press **Enter** for English (`en`), or type **one** code such as `fr`. Not a list. |
-| **Target languages** | The languages to add, comma-separated, for example `fr,es,de`. Pressing Enter on an empty line just asks again. |
-| **How would you like to translate?** | Type the **number** of a cloud provider (OpenAI, Anthropic Claude or Google Gemini). Nothing is chosen for you. The local model is the last option. |
+| **Source language** | The language your code's text is written in. Press **Enter** for English, or type to search the list (`fre`, `ja`) and press Enter on the one you want. |
+| **Target languages** | Type to search, press **Tab** to select a language (repeat for each one), then **Enter**. Languages already listed in `<AutoScale languages>` are preselected. |
+| **How would you like to translate?** | Use the arrow keys to pick a cloud provider (OpenAI, Anthropic Claude or Google Gemini) and press Enter. Nothing is chosen for you. The local model is the last option. |
 | **Catalog folder** | Press **Enter** to keep the default. |
-| **API key** | Paste your key; what you type is hidden. It is saved to `.env`, and `.env` is added to `.gitignore`. Press Enter to skip and add `GEMINI_API_KEY=...` (or `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) to `.env` yourself later. |
+| **API key** | Paste your key; it is masked as you type. It is saved to `.env`, and `.env` is added to `.gitignore`. Press Enter to skip and add `GEMINI_API_KEY=...` (or `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`) to `.env` yourself later. |
+
+Press **Ctrl+C** or **Esc** at any question to cancel.
 
 It writes `auto-locale.config.ts` and adds the plugin to your `vite.config`. It translates and downloads nothing. To skip the questions: `npx react-autolocale init --provider gemini --source en --locales fr,es`.
 
@@ -97,22 +99,29 @@ Optional: `npx react-autolocale add switcher` copies an editable language switch
 | `export` | Copies the translations into `react-autolocale.overrides.json` for hand editing. | None |
 | `add switcher` / `add banner` | Copies an editable component into your project. | None |
 
-`init` also accepts flags, so it can run without prompts in scripts: `--source en --locales fr,es --provider local|openai|anthropic|gemini|ollama --model <id> --api-key-env <NAME> --output <dir> --yes`. Every command takes `--root <dir>`; the default is the nearest folder with a `package.json`.
+`init` also accepts flags, so it can run without prompts in scripts: `--source en --locales fr,es --provider local|openai|anthropic|gemini|ollama --model <id> --api-key-env <NAME> --output <dir> --yes` (or `-y`). Every command takes `--root <dir>`; the default is the nearest folder with a `package.json`.
+
+`npx react-autolocale --help` lists the commands, and `npx react-autolocale <command> --help` (or `help <command>`) shows a command's flags and examples. A mistyped command suggests the closest one. Exit codes: `0` success, `1` failed strings or an error, `2` an invalid flag or argument, `127` an unknown command, `130` cancelled.
 
 A `generate` run looks like this:
 
 ```text
-React Auto Locale
-
-✓ Scanned 24 source files
-✓ Found 3 new strings (84 in use)
-Using openai:gpt-6-astra.
-✓ Kept 243 existing translations
-✓ Translated 9 strings (fr 3, es 3, de 3)
-✓ Updated 3 locale catalogs in src/generated/auto-locale/
-
-No source files modified.
+┌   React Auto Locale
+│
+◆  Scanned 24 source files
+◆  Found 3 new strings (84 in use)
+●  Using OpenAI (gpt-6-astra).
+◇  French (fr): 3 strings translated
+◇  Spanish (es): 3 strings translated
+◇  German (de): 3 strings translated
+◆  Kept 243 existing translations
+◆  Translated 9 strings (fr 3, es 3, de 3)
+◆  Updated 3 locale catalogs in src/generated/auto-locale/
+│
+└  No source files modified.
 ```
+
+In a terminal each language shows a live progress bar while it translates. In CI and pipes the progress is printed as plain `fr: 40/120` lines instead.
 
 Failures are listed by language and message id, and the command exits with code 1. They show the source text until you fix them. `npx react-autolocale translate` retries just those strings.
 
@@ -175,7 +184,7 @@ It runs on your machine through Transformers.js, using OPUS-MT for English sourc
 - **Downloads**: on the first `translate`, about 110 MB per English→X language and 870 MB for NLLB-200 (non-English sources, and Portuguese, Japanese, Korean and the other NLLB languages below). If your project doesn't have `@huggingface/transformers`, a 470 MB engine is also installed once into `~/.cache/react-autolocale/engine`.
 - **Reuse**: models are cached in `~/.cache/react-autolocale` and shared by every project. A loaded model is kept for the whole run.
 - **Speed**: OPUS-MT translates 8 strings per call; on an Apple-silicon Mac that measured about 5× faster than one at a time (32 UI strings in about 0.65 s per language once the model was loaded). NLLB runs one string at a time, because batching produced garbage, so it is much slower.
-- **Progress and interruption**: progress is printed per language, and work is saved after every batch, so Ctrl+C or a crash loses at most one batch.
+- **Progress and interruption**: each language gets a progress bar (model downloads show their percentage in it), and work is saved after every batch. Press Ctrl+C once to stop after the batch in flight; a second Ctrl+C quits at once. A crash loses at most one batch.
 
 Engines receive text with protected pieces replaced by tokens (`X0X`, `{name}`) and must return them unchanged. Whatever the engine, the results are checked: a translation that drops a token or changes a number is retried once with numbers locked, and is otherwise reported as failed. It is never stored.
 

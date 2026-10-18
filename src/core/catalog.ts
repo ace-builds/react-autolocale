@@ -89,6 +89,11 @@ export interface TranslateOptions {
   chunkSize?: number;
   shouldStop?: () => boolean;
   log?: (msg: string) => void;
+  /**
+   * Called when a language with missing strings starts (done 0), after each chunk, and once more with
+   * `finished` when that language ends (also when the run stops). Replaces the per-chunk progress lines in `log`.
+   */
+  onProgress?: (e: { lang: string; done: number; total: number; failed: number; finished: boolean }) => void;
 }
 
 /** Fills every active message missing from each target catalog. Valid existing entries are never replaced. */
@@ -119,7 +124,11 @@ export async function translateMissing(project: Project, manifest: Manifest, opt
     if (r.reused) writeJson(catalogFile(project, lang), catalog);
     if (!missing.length) continue;
 
-    log(`${lang}: translating ${missing.length} string${missing.length === 1 ? "" : "s"}...`);
+    const progress = (done: number, finished = false) =>
+      opts.onProgress?.({ lang, done, total: missing.length, failed: r.failed.length, finished });
+    if (opts.onProgress) progress(0);
+    else log(`${lang}: translating ${missing.length} string${missing.length === 1 ? "" : "s"}...`);
+    let done = 0;
     for (let i = 0; i < missing.length; i += chunkSize) {
       if (opts.shouldStop?.()) {
         report.stopped ??= "interrupted";
@@ -154,9 +163,12 @@ export async function translateMissing(project: Project, manifest: Manifest, opt
       // Persist after every chunk: an interrupted run keeps everything finished so far.
       writeJson(catalogFile(project, lang), catalog);
       writeJson(cachePath(project), cache);
-      log(`${lang}: ${Math.min(i + chunkSize, missing.length)}/${missing.length}`);
+      done = Math.min(i + chunkSize, missing.length);
+      if (opts.onProgress) progress(done);
+      else log(`${lang}: ${done}/${missing.length}`);
       if (report.stopped) break;
     }
+    progress(done, true);
     if (report.stopped) break;
   }
   return report;

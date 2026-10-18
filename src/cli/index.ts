@@ -1,106 +1,13 @@
-#!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { exportTranslations, OVERRIDES_FILE } from "../core/overrides.js";
-import { loadProject } from "../core/project.js";
-import { runClean, runGenerate, runScan, runTranslate, type Out } from "./commands.js";
-import { runInit, type InitFlags } from "./init.js";
-import { createPrompter } from "./prompt.js";
+import { Args, Command, Flags, loadHelpClass } from "@oclif/core";
+import { info, intro, note, ok, outro, plural, type Out } from "./out.js";
+import { createTerminalOut } from "./terminal.js";
 
-const HELP = `react-autolocale
+// The oclif commands (`explicit` discovery: package.json points oclif at the COMMANDS export of this file).
+// Heavy modules (Babel, Vite, jsdom) are imported inside `run`, so `--help` stays instant.
 
-Usage:
-  react-autolocale init [--source en] [--locales fr,es] [--provider local|openai|anthropic|gemini|ollama]
-                        [--model <id>] [--api-key-env <NAME>] [--output <dir>] [--yes] [--force]
-      Sets up auto-locale.config.ts, the translation provider and the Vite plugin. Downloads nothing.
-  react-autolocale generate [--lang fr,es]
-      Scans the source, then translates new strings and writes the catalogs. Incremental.
-  react-autolocale sync [--lang fr,es]
-      Same as generate: run it after changing text in your components.
-  react-autolocale scan
-      Extracts strings and updates .auto-locale/manifest.json. No translation, no network.
-  react-autolocale translate [--lang fr,es]
-      Translates strings missing from the catalogs (retries anything that failed before).
-  react-autolocale clean [--yes]
-      Lists strings no longer in the source and removes their translations once confirmed.
-  react-autolocale export
-      Copies the generated translations to ${OVERRIDES_FILE} so you can edit them.
-      Anything in that file always wins over machine translation.
-  react-autolocale add switcher|banner [--dir src/components]
-      Copies an editable <LanguageSwitcher /> or <LanguageBanner /> into your project.
-
-Options:
-  --root <dir>   Project root (default: the nearest folder with a package.json).
-`;
-
-const TSX = `import { useLanguage } from "react-autolocale";
-
-// This file is yours: change the markup, style it, or replace it entirely.
-export function LanguageSwitcher() {
-  const { language, languages, setLanguage } = useLanguage();
-  return (
-    <div role="group" aria-label="Language">
-      {languages.map((l) => (
-        <button
-          key={l.code}
-          lang={l.code}
-          aria-pressed={l.code === language}
-          onClick={() => setLanguage(l.code)}
-        >
-          {l.native}
-        </button>
-      ))}
-    </div>
-  );
-}
-`;
-
-const JSX = TSX;
-
-const BANNER_TSX = `import { useLanguageSuggestion } from "react-autolocale";
-
-// This file is yours: change the markup, style it, or replace it entirely.
-// It renders nothing unless the visitor's browser language differs from this page's language.
-export function LanguageBanner() {
-  const suggestion = useLanguageSuggestion();
-  if (!suggestion) return null;
-  return (
-    <div role="region" aria-label={suggestion.native}>
-      <span>{suggestion.text}</span>
-      <button onClick={suggestion.accept}>{suggestion.switchLabel}</button>
-      <button onClick={suggestion.dismiss}>{suggestion.dismissLabel}</button>
-    </div>
-  );
-}
-`;
-
-function flag(args: string[], name: string): string | undefined {
-  const i = args.indexOf(name);
-  return i >= 0 ? args[i + 1] : undefined;
-}
-
-function addComponent(root: string, args: string[], name: "LanguageSwitcher" | "LanguageBanner"): void {
-  const dir = path.resolve(root, flag(args, "--dir") ?? (fs.existsSync(path.join(root, "src")) ? "src/components" : "components"));
-  const ts = fs.existsSync(path.join(root, "tsconfig.json"));
-  const file = path.join(dir, ts ? `${name}.tsx` : `${name}.jsx`);
-  if (fs.existsSync(file)) throw new Error(`${path.relative(root, file)} already exists.`);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(file, name === "LanguageBanner" ? BANNER_TSX : ts ? TSX : JSX);
-  console.log(`Created ${path.relative(root, file)}\nImport it anywhere: import { ${name} } from "./components/${name}";`);
-}
-
-/** --name value / --flag pairs. */
-function parseArgs(argv: string[]): { positional: string[]; flags: Record<string, string | true> } {
-  const positional: string[] = [];
-  const flags: Record<string, string | true> = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i]!;
-    if (!a.startsWith("--")) positional.push(a);
-    else if (argv[i + 1] !== undefined && !argv[i + 1]!.startsWith("--")) flags[a.slice(2)] = argv[++i]!;
-    else flags[a.slice(2)] = true;
-  }
-  return { positional, flags };
-}
+const PROVIDERS = ["openai", "anthropic", "gemini", "local", "ollama"] as const;
 
 /** The project the user means: --root, else the nearest folder (from cwd up) with a package.json. */
 function findRoot(explicit?: string): string {
@@ -111,64 +18,171 @@ function findRoot(explicit?: string): string {
   }
 }
 
-const list = (v: string | true | undefined) => (typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : undefined);
-const str = (v: string | true | undefined) => (typeof v === "string" ? v : undefined);
+const langFlag = Flags.string({
+  summary: "Only these target languages (comma-separated). Default: every target in the config.",
+  multiple: true,
+  delimiter: ",",
+  helpValue: "fr,es",
+});
 
-async function main(): Promise<void> {
-  const { positional, flags } = parseArgs(process.argv.slice(2));
-  const [cmd, what] = positional;
-  const root = findRoot(str(flags.root));
-  const out: Out = { log: (m) => console.log(m) };
-  const interactive = !!process.stdin.isTTY && !flags.yes;
+const failed = (r: { stopped?: string; langs: Record<string, { failed: unknown[] }> } | null) =>
+  !!r && (!!r.stopped || Object.values(r.langs).some((l) => l.failed.length > 0));
 
-  switch (cmd) {
-    case "init": {
-      const initFlags: InitFlags = {
-        source: str(flags.source),
-        locales: list(flags.locales),
-        provider: str(flags.provider) as InitFlags["provider"],
-        model: str(flags.model),
-        apiKeyEnv: str(flags["api-key-env"]),
-        output: str(flags.output),
-        force: !!flags.force,
-      };
-      await runInit(root, initFlags, createPrompter(interactive), out);
-      return;
-    }
-    case "scan":
-      out.log("React Auto Locale\n");
-      runScan(await loadProject(root, out), out);
-      out.log("\nNo source files modified.");
-      return;
-    case "translate": {
-      const report = await runTranslate(await loadProject(root, out), { langs: list(flags.lang) }, out);
-      if (report && (report.stopped || Object.values(report.langs).some((r) => r.failed.length))) process.exitCode = 1;
-      return;
-    }
-    case "generate":
-    case "sync": {
-      const { translate } = await runGenerate(await loadProject(root, out), { langs: list(flags.lang) }, out);
-      if (translate && (translate.stopped || Object.values(translate.langs).some((r) => r.failed.length))) process.exitCode = 1;
-      return;
-    }
-    case "clean":
-      await runClean(await loadProject(root, out), { yes: !!flags.yes }, createPrompter(!!process.stdin.isTTY && !flags.yes), out);
-      return;
-    case "export": {
-      const { file, languages } = exportTranslations(await loadProject(root, out));
-      out.log(`Wrote ${path.relative(root, file)}: ${Object.entries(languages).map(([l, n]) => `${l} ${n}`).join(", ")} strings.`);
-      out.log("Edit any value, commit the file, and rebuild. Your edits always win over machine translation.");
-      return;
-    }
-    case "add":
-      if (what === "switcher") return addComponent(root, process.argv.slice(2), "LanguageSwitcher");
-      if (what === "banner") return addComponent(root, process.argv.slice(2), "LanguageBanner");
+abstract class Base extends Command {
+  static baseFlags = {
+    root: Flags.directory({ summary: "Project root. Default: the nearest folder with a package.json.", exists: true, helpGroup: "GLOBAL", helpValue: "dir" }),
+  };
+
+  protected ui: Out = createTerminalOut();
+
+  protected async project(root: string) {
+    const { loadProject } = await import("../core/project.js");
+    return loadProject(root, this.ui);
   }
-  console.log(HELP);
-  if (cmd && cmd !== "help" && cmd !== "--help") process.exitCode = 1;
 }
 
-main().catch((err) => {
-  console.error(`react-autolocale: ${(err as Error).message}`);
-  process.exit(1);
-});
+class Init extends Base {
+  static summary = "Set up auto-locale.config.ts, the translation engine and the Vite plugin.";
+  static description =
+    "Asks for the source and target languages and the translation engine (flags skip the questions), saves a pasted API key " +
+    "to .env, adds .gitignore lines and adds the plugin to vite.config. Downloads nothing and translates nothing.";
+  static examples = [
+    "<%= config.bin %> <%= command.id %>",
+    { description: "Without questions (CI, scripts):", command: "<%= config.bin %> <%= command.id %> --source en --locales fr,es,de --provider openai --yes" },
+  ];
+  static flags = {
+    source: Flags.string({ summary: "Language your code is written in.", helpValue: "en" }),
+    locales: Flags.string({ summary: "Target languages (comma-separated).", multiple: true, delimiter: ",", helpValue: "fr,es" }),
+    provider: Flags.string({ summary: "Translation engine.", options: [...PROVIDERS] }),
+    model: Flags.string({ summary: "Model id (required for ollama; cloud engines have a default)." }),
+    "api-key-env": Flags.string({ summary: "Environment variable that holds the API key.", helpValue: "NAME" }),
+    output: Flags.string({ summary: "Catalog folder, relative to the project root.", helpValue: "dir" }),
+    yes: Flags.boolean({ char: "y", summary: "Ask nothing: use the flags and the detected defaults." }),
+    force: Flags.boolean({ summary: "Replace an existing auto-locale.config.ts without asking." }),
+  };
+
+  async run() {
+    const { flags } = await this.parse(Init);
+    const [{ runInit }, { createPrompter }] = await Promise.all([import("./init.js"), import("./prompt.js")]);
+    await runInit(
+      findRoot(flags.root),
+      {
+        source: flags.source,
+        locales: flags.locales?.map((l) => l.trim().toLowerCase()).filter(Boolean),
+        provider: flags.provider as (typeof PROVIDERS)[number] | undefined,
+        model: flags.model,
+        apiKeyEnv: flags["api-key-env"],
+        output: flags.output,
+        force: flags.force,
+      },
+      createPrompter(!!process.stdin.isTTY && !flags.yes),
+      this.ui,
+    );
+  }
+}
+
+class Generate extends Base {
+  static summary = "Scan the source, then translate new strings and write the catalogs (alias: sync).";
+  static description = "Incremental: existing translations are kept and only missing strings are sent to the engine. Run it after changing text in your components.";
+  static aliases = ["sync"];
+  static examples = ["<%= config.bin %> <%= command.id %>", "<%= config.bin %> <%= command.id %> --lang fr,es"];
+  static flags = { lang: langFlag };
+
+  async run() {
+    const { flags } = await this.parse(Generate);
+    const { runGenerate } = await import("./commands.js");
+    const { translate } = await runGenerate(await this.project(findRoot(flags.root)), { langs: flags.lang }, this.ui);
+    if (failed(translate)) process.exitCode = 1;
+  }
+}
+
+class Scan extends Base {
+  static summary = "Extract strings into .auto-locale/manifest.json. No translation, no network.";
+  static examples = ["<%= config.bin %> <%= command.id %>"];
+
+  async run() {
+    const { flags } = await this.parse(Scan);
+    const { runScan } = await import("./commands.js");
+    intro(this.ui, "React Auto Locale");
+    runScan(await this.project(findRoot(flags.root)), this.ui);
+    outro(this.ui, "No source files modified.");
+  }
+}
+
+class Translate extends Base {
+  static summary = "Translate strings missing from the catalogs.";
+  static description = "Also retries anything that failed before. Press Ctrl+C once to stop after the current batch; everything finished is saved.";
+  static examples = ["<%= config.bin %> <%= command.id %>", "<%= config.bin %> <%= command.id %> --lang ja"];
+  static flags = { lang: langFlag };
+
+  async run() {
+    const { flags } = await this.parse(Translate);
+    const { runTranslate } = await import("./commands.js");
+    intro(this.ui, "React Auto Locale");
+    const report = await runTranslate(await this.project(findRoot(flags.root)), { langs: flags.lang }, this.ui);
+    if (failed(report)) process.exitCode = 1;
+    outro(this.ui, failed(report) ? "Finished with errors." : "Done.");
+  }
+}
+
+class Clean extends Base {
+  static summary = "Remove translations of strings that are no longer in the source.";
+  static description = "Lists them first and asks before removing anything.";
+  static examples = ["<%= config.bin %> <%= command.id %>", "<%= config.bin %> <%= command.id %> --yes"];
+  static flags = { yes: Flags.boolean({ char: "y", summary: "Remove without asking." }) };
+
+  async run() {
+    const { flags } = await this.parse(Clean);
+    const [{ runClean }, { createPrompter }] = await Promise.all([import("./commands.js"), import("./prompt.js")]);
+    intro(this.ui, "React Auto Locale");
+    const removed = await runClean(await this.project(findRoot(flags.root)), { yes: flags.yes }, createPrompter(!!process.stdin.isTTY && !flags.yes), this.ui);
+    outro(this.ui, removed ? `Removed ${plural(removed, "string")}.` : "Nothing changed.");
+  }
+}
+
+class Export extends Base {
+  static summary = "Copy the generated translations to react-autolocale.overrides.json so you can edit them.";
+  static description = "Anything in that file always wins over machine translation. Commit it and rebuild.";
+  static examples = ["<%= config.bin %> <%= command.id %>"];
+
+  async run() {
+    const { flags } = await this.parse(Export);
+    const root = findRoot(flags.root);
+    const { exportTranslations } = await import("../core/overrides.js");
+    intro(this.ui, "React Auto Locale");
+    const { file, languages } = exportTranslations(await this.project(root));
+    ok(this.ui, `Wrote ${path.relative(root, file)}: ${Object.entries(languages).map(([l, n]) => `${l} ${n}`).join(", ")} strings`);
+    info(this.ui, "Edit any value, commit the file, and rebuild. Your edits always win over machine translation.");
+    outro(this.ui, "Done.");
+  }
+}
+
+class Add extends Base {
+  static summary = "Copy an editable <LanguageSwitcher /> or <LanguageBanner /> into your project.";
+  static examples = ["<%= config.bin %> <%= command.id %> switcher", "<%= config.bin %> <%= command.id %> banner --dir src/ui"];
+  static args = { component: Args.string({ description: "Component to add.", required: true, options: ["switcher", "banner"] }) };
+  static flags = { dir: Flags.string({ summary: "Folder to write it to. Default: src/components (or components/).", helpValue: "dir" }) };
+
+  async run() {
+    const { args, flags } = await this.parse(Add);
+    const { addComponent } = await import("./add.js");
+    const { file, name } = addComponent(findRoot(flags.root), args.component as "switcher" | "banner", flags.dir);
+    ok(this.ui, `Created ${file}`);
+    note(this.ui, `import { ${name} } from "./components/${name}";`, "Import it anywhere");
+  }
+}
+
+/** `react-autolocale help [command]`: oclif core only handles `--help`; the help command normally comes from a plugin. */
+class HelpCommand extends Command {
+  static summary = "Show help for react-autolocale or one of its commands.";
+  static strict = false;
+  static args = { command: Args.string({ description: "Command to show help for." }) };
+
+  async run() {
+    const { argv } = await this.parse(HelpCommand);
+    const Help = await loadHelpClass(this.config);
+    await new Help(this.config, this.config.pjson.oclif.helpOptions).showHelp(argv as string[]);
+  }
+}
+
+export const COMMANDS = { init: Init, generate: Generate, scan: Scan, translate: Translate, clean: Clean, export: Export, add: Add, help: HelpCommand };
